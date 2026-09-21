@@ -36,6 +36,9 @@ const http = require("node:http");
 const PUERTO = Number(process.env.PUERTO_PRUEBA) || 3391;
 const RUTA_CLIENTE_SOCKETIO = path.join(__dirname, "..", "node_modules", "socket.io", "client-dist", "socket.io.js");
 
+// Configuración del servidor (única fuente de verdad de las reglas y tiempos).
+const CONFIG = require(path.join(__dirname, "..", "servidor", "config.js"));
+
 const fallos = [];
 let pruebas = 0;
 
@@ -387,8 +390,16 @@ function pedirListadoDeSonidos() {
 
         const primerEstado = clientes[0].estadosPartida.find((paquete) => paquete.turno);
         comprobar(Boolean(primerEstado && primerEstado.turno), "el servidor asigna el primer turno");
-        comprobar(Boolean(primerEstado && primerEstado.tiempo >= 1 && primerEstado.tiempo <= 10),
-            `el primer turno arranca con su cronómetro (${primerEstado ? primerEstado.tiempo : 0} s de 10)`);
+
+        // La duración del turno se lee de la configuración del servidor (única
+        // fuente de verdad): así la prueba sigue valiendo si algún día cambia.
+        const DU = CONFIG.DURACION_TURNO;
+        comprobar(
+            Boolean(primerEstado && primerEstado.tiempo >= 1 && primerEstado.tiempo <= DU) &&
+                primerEstado.duracionTurno === DU,
+            `el primer turno arranca con su cronómetro (${primerEstado ? primerEstado.tiempo : 0} s de ${DU})` +
+                ` y el paquete manda la duración (${primerEstado ? primerEstado.duracionTurno : "sin dato"})`
+        );
 
         /* --- Disparo y explosión sincronizados --- */
         console.log("");

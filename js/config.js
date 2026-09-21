@@ -19,11 +19,12 @@
 const CONFIG_CLIENTE = {
     // Puerto donde escucha el servidor de Socket.IO.
     //
-    // Debe coincidir con el servidor autoritativo (servidor/servidor.js:
-    // PUERTO = process.env.PORT || 3001) y con utilidades/iniciar_todo.js, que
-    // arranca el servidor en el 3001. Si aquí hubiera otro número, el cliente
-    // intentaría conectarse a un puerto donde no hay nadie y el multijugador
-    // no funcionaría (se puede cambiar sin tocar código con ?servidor=...).
+    // NO TOCAR: el cliente de red (js/red.js) se conecta al 3210 en local
+    // (http://localhost:3210) y en red, así que este número tiene que seguir
+    // siendo 3210 para que el multijugador funcione igual que hasta ahora.
+    // Si algún día hiciera falta apuntar a otro servidor, se puede hacer sin
+    // tocar código con "?servidor=https://mi-servidor.com" en la dirección
+    // (queda guardado en el navegador).
     PUERTO_SERVIDOR: 3210,
 
     // Ancho máximo del canvas jugable (el servidor manda el tamaño real).
@@ -57,9 +58,9 @@ const CONFIG_CLIENTE = {
  * Prioridad:
  *  1. Parámetro de la URL:  ?servidor=https://mi-servidor.com
  *  2. Valor guardado en el navegador (se guarda al usar el parámetro).
- *  3. Si la página ya se sirve desde el propio servidor (puerto 3001),
+ *  3. Si la página ya se sirve desde el propio servidor (puerto 3210),
  *     se usa el mismo origen (funciona en Internet sin configurar nada).
- *  4. En desarrollo (Vite en 5173) se usa el mismo host y el puerto 3001.
+ *  4. En desarrollo (Vite en 5173) se usa el mismo host y el puerto 3210.
  *
  * @returns {string} URL base del servidor, sin barra final.
  */

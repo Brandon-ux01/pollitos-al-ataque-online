@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pollitos al Ataque Online - Multijugador</title>
     <meta name="description" content="Juego multijugador online para 6 jugadores: Pollitos al Ataque.">
-    <link rel="stylesheet" href="css/estilos.css?v=online-3.0">
+    <link rel="stylesheet" href="css/estilos.css?v=online-3.1">
 </head>
 
 <body>
@@ -20,10 +20,18 @@
          ===================================================== -->
     <div id="aplicacion">
 
-    <!-- Fondo: lámina de dibujos animados del juego (escenarios/fondo_menu.png)
-         con un velo de color encima. La capa .fondo-velo suaviza el dibujo
-         para que los textos de las tarjetas se lean siempre bien. -->
+    <!-- Fondo: lámina de dibujos animados del juego (escenarios/fondo_menu.png).
+         Son DOS capas del mismo dibujo:
+           .fondo-relleno: copia ampliada y desenfocada; rellena el 100 % de la
+                           ventana (sin huecos ni barras) con cualquier proporción.
+           .fondo-lamina:  el dibujo nítido, escalado SIEMPRE por la altura de la
+                           ventana y anclado arriba, así el logotipo del arte cae
+                           siempre en la misma franja (26 %-61 % del alto) y el
+                           panel del menú sabe cuánto hueco tiene por debajo.
+         .fondo-velo oscurece la parte baja para que los textos se lean bien. -->
     <div class="fondo" aria-hidden="true">
+        <span class="fondo-relleno"></span>
+        <span class="fondo-lamina"></span>
         <span class="fondo-velo"></span>
         <span class="fondo-rayos"></span>
     </div>
@@ -33,18 +41,34 @@
 
     <!-- =====================================================
          MENÚ PRINCIPAL
-         (sin CRÉDITOS: JUGAR, CREAR SALA, UNIRSE A SALA,
-          OPCIONES y SALIR)
+         Tres zonas separadas para que NADA se superponga:
+           1. .logo ......... franja del logotipo del arte (con halo suave)
+           2. .subtitulo .... "COMBATE MULTIJUGADOR ONLINE"
+           3. .panel-menu ... nombre, botones, ayuda y estado del servidor
+         (JUGAR, CREAR SALA, UNIRSE A SALA, OPCIONES y SALIR)
          ===================================================== -->
     <main id="menu-principal" class="pantalla pantalla-menu">
-        <section class="tarjeta tarjeta-menu">
+        <div class="escena-menu">
+            <!-- ZONA 1: el logotipo lo pinta la lámina del fondo. Esta franja
+                 reserva su sitio (61 % del alto) para que el panel no lo tape
+                 nunca y le añade un halo transparente para darle prioridad. -->
+            <div class="logo" role="img" aria-label="Pollitos al Ataque"></div>
+
+            <!-- ZONA 2: subtítulo, justo debajo del logotipo. -->
+            <p class="subtitulo">COMBATE MULTIJUGADOR ONLINE</p>
+        </div>
+
+        <!-- ZONA 3: panel del menú (siempre por debajo del logotipo). -->
+        <section class="tarjeta tarjeta-menu panel-menu">
             <p class="marca">
                 <img class="marca-avatar" src="assets/imagenes/interfaz/hud/chip_avatar.png" alt="">
                 POLLITOS AL ATAQUE
             </p>
 
-            <label for="nombre-jugador">Tu nombre</label>
-            <input id="nombre-jugador" maxlength="18" autocomplete="nickname" placeholder="Escribe tu nombre">
+            <div class="campo-menu">
+                <label for="nombre-jugador">Tu nombre</label>
+                <input id="nombre-jugador" maxlength="18" autocomplete="nickname" placeholder="Escribe tu nombre">
+            </div>
 
             <div class="menu">
                 <button id="btn-jugar-online" class="boton-menu boton-arte" type="button" aria-label="Jugar" title="Jugar: entra en la primera sala con hueco">
@@ -52,18 +76,18 @@
                 </button>
                 <button id="btn-crear-sala" class="boton-menu" type="button">CREAR SALA</button>
                 <button id="btn-ir-unirse" class="boton-menu" type="button">UNIRSE A SALA</button>
-                <button id="btn-ir-opciones" class="boton-menu boton-arte" type="button" aria-label="Opciones" title="Opciones de sonido y ayudas visuales">
+                <button id="btn-ir-opciones" class="boton-menu boton-arte boton-icono" type="button" aria-label="Opciones" title="Opciones de sonido y ayudas visuales">
                     <img src="assets/imagenes/interfaz/botones/opciones.png" alt="Opciones">
                 </button>
-                <button id="btn-salir" class="boton-menu boton-arte" type="button" aria-label="Salir" title="Salir del juego">
+                <button id="btn-salir" class="boton-menu boton-arte boton-icono" type="button" aria-label="Salir" title="Salir del juego">
                     <img src="assets/imagenes/interfaz/botones/salir.png" alt="Salir">
                 </button>
             </div>
 
             <p class="pista-menu">
-                <strong>JUGAR</strong> entra en la primera sala con hueco.<br>
-                <strong>CREAR SALA</strong> abre tu propia sala y te da un código para compartir.<br>
-                <strong>UNIRSE A SALA</strong> entra con el código de un amigo.
+                <strong>JUGAR</strong> entra en una sala ·
+                <strong>CREAR SALA</strong> abre la tuya con código ·
+                <strong>UNIRSE</strong> entra con el código de un amigo
             </p>
 
             <p id="estado-conexion" class="estado-conexion">Conectando con el servidor...</p>
@@ -279,19 +303,19 @@
     </div>
     <!-- fin de #aplicacion -->
 
-    <script src="js/configuracion/configuracion_sonido.js?v=online-3.0"></script>
-    <script src="js/config.js?v=online-3.0"></script>
-    <script src="js/recursos.js?v=online-3.0"></script>
-    <script src="js/sonido.js?v=online-3.0"></script>
-    <script src="js/red.js?v=online-3.0"></script>
-    <script src="js/terreno.js?v=online-3.0"></script>
-    <script src="js/escenario.js?v=online-3.0"></script>
-    <script src="js/particulas.js?v=online-3.0"></script>
-    <script src="js/explosion.js?v=online-3.0"></script>
-    <script src="js/personaje.js?v=online-3.0"></script>
-    <script src="js/interfaz.js?v=online-3.0"></script>
-    <script src="js/juego.js?v=online-3.0"></script>
-    <script src="js/main.js?v=online-3.0"></script>
+    <script src="js/configuracion/configuracion_sonido.js?v=online-3.1"></script>
+    <script src="js/config.js?v=online-3.1"></script>
+    <script src="js/recursos.js?v=online-3.1"></script>
+    <script src="js/sonido.js?v=online-3.1"></script>
+    <script src="js/red.js?v=online-3.1"></script>
+    <script src="js/terreno.js?v=online-3.1"></script>
+    <script src="js/escenario.js?v=online-3.1"></script>
+    <script src="js/particulas.js?v=online-3.1"></script>
+    <script src="js/explosion.js?v=online-3.1"></script>
+    <script src="js/personaje.js?v=online-3.1"></script>
+    <script src="js/interfaz.js?v=online-3.1"></script>
+    <script src="js/juego.js?v=online-3.1"></script>
+    <script src="js/main.js?v=online-3.1"></script>
 </body>
 
 </html>

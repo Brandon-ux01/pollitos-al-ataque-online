@@ -59,7 +59,12 @@ body {
     position: relative;
     width: 100vw;
     height: 100vh;
+    /* La ventana VISIBLE real (móviles y tablets con barra del navegador):
+       evita que el contenedor sea más alto que la pantalla. Si el navegador no
+       entiende dvh, se queda con el 100vh / 100vh de arriba. */
+    height: 100dvh;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow: hidden;
 }
 
@@ -1057,11 +1062,38 @@ body {
 /* --- Fondo del menú ------------------------------------------------------ */
 
 .fondo {
+    /* Color del cielo del propio dibujo: es el último respaldo si la imagen
+       tardara en cargar (nunca se ve blanco ni negro). */
     background-color: #6ec9f5;
+}
+
+/* Copia ampliada y desenfocada del dibujo: cubre el 100 % de la ventana con
+   cualquier proporción (pantallas anchas, cuadradas o muy altas), así que no
+   queda ningún hueco ni hace falta desplazamiento. */
+.fondo-relleno {
+    position: absolute;
+    inset: -8%;
     background-image: url("../assets/imagenes/escenarios/fondo_menu.png");
     background-size: cover;
-    background-position: center bottom;
+    background-position: center;
     background-repeat: no-repeat;
+    filter: blur(16px) brightness(0.9) saturate(1.05);
+    transform: scale(1.08);
+}
+
+/* Lámina nítida: se escala SIEMPRE por la altura de la ventana y se ancla
+   arriba. Así el logotipo del arte cae siempre en la misma franja (26 %-61 %
+   del alto) y el panel del menú puede colocarse debajo sin taparlo, se mire
+   desde el tamaño que se mire. Los bordes se funden con el relleno de arriba. */
+.fondo-lamina {
+    position: absolute;
+    inset: 0;
+    background-image: url("../assets/imagenes/escenarios/fondo_menu.png");
+    background-size: auto 100vh;
+    background-position: center top;
+    background-repeat: no-repeat;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 6%, #000 94%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, #000 6%, #000 94%, transparent 100%);
 }
 
 .fondo-velo {
@@ -1089,12 +1121,87 @@ body {
 }
 
 .tarjeta-menu {
-    width: min(100%, 620px);
+    width: min(100%, 520px);
 }
 
-/* El menú se apoya en la parte baja para que el logotipo del fondo se vea. */
+/* --- Menú principal: logotipo, subtítulo y panel ------------------------- */
+/* Medido sobre la lámina del arte (escenarios/fondo_menu.png, 641x351 px): el
+   rótulo ocupa del 38 % al 68 % de la altura y las llamas de abajo llegan al
+   75 %. De ahí salen estas dos medidas, que son las que garantizan que el panel
+   del menú caiga SIEMPRE por debajo del rótulo, sin taparlo, en cualquier
+   resolución: por eso la franja reservada es del 69 % del alto. */
 .pantalla-menu {
-    justify-content: flex-end;
+    --franja-logo: 69vh;
+    --franja-subtitulo: 3.4vh;
+    padding: 0;
+    gap: 0;
+    justify-content: flex-start;
+}
+
+.escena-menu {
+    flex: 0 0 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Zona 1: franja reservada para el logotipo del arte. El halo es transparente
+   (deja ver el dibujo) y sirve para darle prioridad visual. */
+.pantalla-menu .logo {
+    width: 100%;
+    height: var(--franja-logo);
+    background: radial-gradient(closest-side at 50% 45%, rgba(255, 246, 201, 0.16), rgba(255, 246, 201, 0) 78%);
+    pointer-events: none;
+}
+
+/* Zona 2: subtítulo, pegado al borde inferior de la franja del logotipo. */
+.pantalla-menu .subtitulo {
+    height: var(--franja-subtitulo);
+    margin: 0;
+    display: grid;
+    place-items: start center;
+    color: #ffffff;
+    font-size: clamp(11px, 1.9vh, 18px);
+    font-weight: bold;
+    letter-spacing: clamp(1px, 0.45vw, 5px);
+    text-align: center;
+    text-shadow: 0 2px 0 rgba(6, 18, 30, 0.95), 0 0 12px rgba(6, 18, 30, 0.85), 0 0 3px rgba(6, 18, 30, 0.9);
+}
+
+/* Zona 3: panel del menú. Es SIEMPRE más corto que el hueco que queda bajo el
+   rótulo (max-height calculado), así que no puede taparlo nunca. En ventanas
+   anchas reparte el contenido en dos bloques (datos | botones) para no ganar
+   altura; en ventanas estrechas pasa a una sola columna. Si aun así el
+   contenido no cupiera (ventanas muy bajas y estrechas), se desplaza DENTRO de
+   la tarjeta: la página nunca hace scroll. */
+.pantalla-menu .panel-menu {
+    width: min(96vw, 820px);
+    max-height: calc(98vh - var(--franja-logo) - var(--franja-subtitulo));
+    margin: 0 0 2vh;
+    padding: clamp(8px, 1.1vh, 16px) clamp(12px, 1.8vw, 22px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 1.15fr);
+    column-gap: clamp(12px, 1.8vw, 26px);
+    row-gap: clamp(4px, 0.7vh, 9px);
+    align-items: center;
+    text-align: center;
+}
+
+.pantalla-menu .panel-menu .marca {
+    grid-column: 1 / -1;
+}
+
+/* Bloque de datos: nombre y estado de la conexión (columna izquierda). */
+.pantalla-menu .campo-menu {
+    grid-column: 1;
+}
+
+/* Bloque de botones (columna derecha, ocupando las tres filas de datos). */
+.pantalla-menu .panel-menu .menu {
+    grid-column: 2;
+    grid-row: 2 / span 3;
+    margin-top: 0;
 }
 
 .marca {
@@ -1149,8 +1256,9 @@ input:not([type="checkbox"]):not([type="range"]):focus {
 
 /* --- Botones ------------------------------------------------------------ */
 
-/* Menú en dos columnas: los botones del arte son muy anchos y bajos, así que
-   repartidos de dos en dos no ocupan media pantalla. JUGAR ocupa las dos. */
+/* Menú en dos columnas: los botones del arte son anchos y bajos, así que
+   repartidos de dos en dos no ocupan media pantalla. JUGAR ocupa las dos
+   columnas y OPCIONES / SALIR van juntos en la última fila. */
 .menu {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1160,6 +1268,75 @@ input:not([type="checkbox"]):not([type="range"]):focus {
 
 #btn-jugar-online {
     grid-column: 1 / -1;
+}
+
+/* --- Panel del menú: medidas compactas y proporcionales ------------------ */
+/* Todo se mide en vh, así que al reducir la ventana se reduce TODO (rótulo,
+   campo, botones, textos) y sigue cabiendo por debajo del logotipo sin
+   ocultar nada. */
+
+.pantalla-menu .marca {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: clamp(11px, 1.6vh, 15px);
+    letter-spacing: clamp(1px, 0.35vw, 3px);
+}
+
+.pantalla-menu .marca-avatar {
+    width: clamp(20px, 3vh, 32px);
+    height: clamp(20px, 3vh, 32px);
+}
+
+.pantalla-menu label {
+    margin: clamp(6px, 1vh, 10px) 0 3px;
+    font-size: clamp(10px, 1.3vh, 13px);
+}
+
+.pantalla-menu input:not([type="checkbox"]):not([type="range"]) {
+    padding: clamp(6px, 1vh, 12px) 12px;
+    font-size: clamp(13px, 1.7vh, 16px);
+    text-align: center;
+}
+
+.pantalla-menu .menu {
+    margin-top: clamp(8px, 1.4vh, 14px);
+    gap: clamp(6px, 1vh, 12px);
+}
+
+.pantalla-menu .boton-menu {
+    padding: clamp(7px, 1.2vh, 14px) clamp(10px, 1.4vw, 16px);
+    border-radius: 14px;
+    font-size: clamp(12px, 1.5vh, 15px);
+}
+
+.pantalla-menu .boton-arte {
+    padding: clamp(3px, 0.55vh, 7px);
+}
+
+/* JUGAR: el botón protagonista. */
+.pantalla-menu #btn-jugar-online img {
+    max-height: clamp(28px, 4.7vh, 50px);
+}
+
+/* OPCIONES y SALIR: iconos del arte, más bajos para no robar altura. */
+.pantalla-menu .boton-icono img {
+    max-height: clamp(26px, 4.1vh, 42px);
+}
+
+.pantalla-menu .pista-menu {
+    margin: clamp(6px, 1vh, 12px) 0 0;
+    font-size: clamp(9.5px, 1.25vh, 12px);
+    line-height: 1.35;
+    text-align: center;
+}
+
+.pantalla-menu .estado-conexion {
+    min-height: 0;
+    margin: clamp(4px, 0.8vh, 8px) 0 0;
+    font-size: clamp(10px, 1.25vh, 12px);
+    line-height: 1.3;
 }
 
 .boton-menu {
@@ -1615,5 +1792,46 @@ input:not([type="checkbox"]):not([type="range"]):focus {
 
     .arte-espera {
         width: 96px;
+    }
+}
+
+/* Ventanas estrechas: el panel pasa a una sola columna (en el orden del HTML:
+   rótulo, nombre, botones, ayuda y estado) y mantiene las dos columnas SOLO
+   para los botones, que son anchos y bajos. */
+@media (max-width: 780px) {
+    .pantalla-menu .panel-menu {
+        grid-template-columns: minmax(0, 1fr);
+        width: min(96vw, 560px);
+    }
+
+    .pantalla-menu .panel-menu .marca,
+    .pantalla-menu .campo-menu,
+    .pantalla-menu .panel-menu .menu,
+    .pantalla-menu .pista-menu,
+    .pantalla-menu .estado-conexion {
+        grid-column: 1;
+        grid-row: auto;
+    }
+
+    .pantalla-menu .menu {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* Ventanas bajas (960p y menos: 900p, 768p, 720p…): se aprieta el alto del
+   panel para que siga cabiendo entero por debajo del rótulo, sin ocultar
+   ningún botón. */
+@media (max-height: 960px) {
+    .pantalla-menu #btn-jugar-online img {
+        max-height: clamp(26px, 4.6vh, 46px);
+    }
+
+    .pantalla-menu .boton-icono img {
+        max-height: clamp(24px, 4vh, 38px);
+    }
+
+    .pantalla-menu .marca-avatar {
+        width: clamp(18px, 2.6vh, 28px);
+        height: clamp(18px, 2.6vh, 28px);
     }
 }

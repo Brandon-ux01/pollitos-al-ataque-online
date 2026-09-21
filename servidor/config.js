@@ -38,7 +38,17 @@ const CONFIG = {
     // --- Tiempos ----------------------------------------------------------
     PASO_SIMULACION: 1 / 30, // segundos por paso autoritativo
     FRECUENCIA_ESTADO: 50, // milisegundos entre paquetes de estado
-    DURACION_TURNO: 10, // segundos por turno (igual que el original)
+
+    /**
+     * Segundos que dura el turno de cada jugador.
+     *
+     * ÚNICO sitio donde se decide esta duración: el servidor cierra el turno
+     * con este valor y lo envía dentro de cada paquete de estado
+     * ("duracionTurno"), así que el HUD del cliente dibuja el reloj con la
+     * misma duración sin tener una segunda copia del número. Cambiar aquí 12
+     * por otro número cambia el cronómetro de todos los jugadores a la vez.
+     */
+    DURACION_TURNO: 12,
     RETARDO_FIN_TURNO: 1, // segundos de margen tras resolverse el último disparo
 
     // --- Personajes -------------------------------------------------------

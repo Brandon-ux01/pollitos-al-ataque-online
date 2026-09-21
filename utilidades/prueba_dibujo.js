@@ -29,6 +29,8 @@ const RAIZ = path.join(__dirname, "..");
 /** Crea un contexto de dibujo que cuenta cada llamada. */
 function crearLienzo() {
     const llamadas = new Map();
+    const textos = []; // Textos dibujados (para cazar números con decimales).
+    const fuentes = []; // Tamaños de letra pedidos (para cazar números gigantes).
     const anotar = (nombre) => (...argumentos) => {
         llamadas.set(nombre, (llamadas.get(nombre) || 0) + 1);
 
@@ -38,10 +40,25 @@ function crearLienzo() {
     const lienzo = {
         canvas: { width: 1200, height: 600 },
         llamadas,
+        textos,
+        // Tamaño de letra más grande pedido en este lienzo.
+        fuenteMayor: 0,
         createLinearGradient: () => ({ addColorStop: anotar("addColorStop") }),
         createRadialGradient: () => ({ addColorStop: anotar("addColorStop") }),
         createPattern: () => null,
-        measureText: () => ({ width: 240 }),
+        // Ancho proporcional al texto: así el recorte de nombres se prueba de verdad.
+        measureText: (texto) => ({ width: String(texto).length * 7 }),
+        get font() {
+            return "";
+        },
+        set font(valor) {
+            const tamano = parseFloat(String(valor).replace(/[^0-9.]/g, ""));
+
+            if (!Number.isNaN(tamano)) {
+                fuentes.push(tamano);
+                lienzo.fuenteMayor = Math.max(lienzo.fuenteMayor, tamano);
+            }
+        },
         save: anotar("save"),
         restore: anotar("restore"),
         translate: anotar("translate"),
@@ -65,7 +82,10 @@ function crearLienzo() {
         strokeRect: anotar("strokeRect"),
         clearRect: anotar("clearRect"),
         drawImage: anotar("drawImage"),
-        fillText: anotar("fillText"),
+        fillText: (texto) => {
+            textos.push(String(texto));
+            llamadas.set("fillText", (llamadas.get("fillText") || 0) + 1);
+        },
         strokeText: anotar("strokeText"),
         setLineDash: anotar("setLineDash")
     };
@@ -362,6 +382,8 @@ function probarHud(descripcion, jugadores, opciones = {}) {
         estado: { turno: primero ? primero.id : null, jugadores: [] },
         jugadores: new Map(jugadores.map((jugador) => [jugador.id, jugador])),
         tiempoRestante: opciones.tiempo === undefined ? 7 : opciones.tiempo,
+        // Duración del turno tal y como la manda el servidor hoy (12 s).
+        duracionTurno: opciones.duracionTurno === undefined ? 12 : opciones.duracionTurno,
         viento: opciones.viento === undefined ? -6 : opciones.viento,
         potenciaLocal: 420,
         anguloLocal: 47,
@@ -387,7 +409,75 @@ probarHud(
     { tiempo: 2 }
 );
 
-/* 4. Aviso de ayuda: se dibuja solo si está activado en OPCIONES. */
+/* 4. Reloj del turno: pequeño, dentro de su panel y sin números gigantes.
+      Esta sección vigila la regresión del cronómetro enorme que se salía de
+      la tarjeta del HUD. */
+
+function probarReloj(descripcion, tiempo) {
+    const lienzo = crearLienzo();
+    const jugador = jugadorDePrueba(0, 200);
+    const interfaz = new api.Interfaz({
+        ancho: mundo.ancho,
+        alto: mundo.alto,
+        estado: { turno: jugador.id, jugadores: [] },
+        jugadores: new Map([[jugador.id, jugador]]),
+        tiempoRestante: tiempo,
+        duracionTurno: CONFIG.DURACION_TURNO,
+        viento: 0,
+        potenciaLocal: 400,
+        anguloLocal: 45,
+        avisoCentral: { tiempo: 0 },
+        miJugador: () => jugador
+    });
+
+    sinError(`Reloj del turno con ${descripcion}`, () => {
+        interfaz.dibujarTarjetaTurno(lienzo);
+    });
+
+    return lienzo;
+}
+
+const lienzoReloj = probarReloj("el tiempo completo", CONFIG.DURACION_TURNO);
+const lienzoRelojUrgente = probarReloj("el tiempo agotándose", 2);
+
+comprobar(
+    (lienzoReloj.llamadas.get("arc") || 0) >= 4,
+    `El reloj pinta su anillo de progreso y su esfera (arc = ${lienzoReloj.llamadas.get("arc") || 0})`
+);
+
+comprobar(
+    lienzoReloj.fuenteMayor <= 24,
+    `El reloj y el nombre usan letra pequeña (máximo ${lienzoReloj.fuenteMayor} px; el antiguo cronómetro era de 32 px)`
+);
+
+comprobar(
+    lienzoReloj.textos.some((texto) => /^\d+$/.test(texto)),
+    `Los segundos se dibujan como número entero (${lienzoReloj.textos.filter((texto) => /^\d+$/.test(texto)).join(", ")})`
+);
+
+comprobar(
+    !lienzoReloj.textos.some((texto) => /^\d+[.,]\d+$/.test(texto)) &&
+        !lienzoRelojUrgente.textos.some((texto) => /^\d+[.,]\d+$/.test(texto)),
+    "Ningún número del cronómetro lleva decimales (nada de 97.140000)"
+);
+
+/* La secuencia COMPLETA que ve el jugador: 12, 11, 10 … 1, 0.
+   Se le pasan a propósito valores internos con decimales (los que producen
+   performance.now() y la resta de tiempos entre paquetes del servidor) para
+   demostrar que en el HUD solo pueden aparecer segundos enteros. */
+
+[12, 11.932421, 11.000001, 10.584321, 9.213421, 5, 1.0000001, 0.9999, 0.000001, 0].forEach((interno) => {
+    const lienzo = probarReloj(`${interno} s internos`, interno);
+    const esperado = String(Math.max(0, Math.ceil(interno)));
+
+    comprobar(
+        lienzo.textos.includes(esperado) &&
+            !lienzo.textos.some((texto) => /^\d+[.,]\d+$/.test(texto)),
+        `Cronómetro: ${interno} s internos -> dibuja "${esperado}" (segundo entero)`
+    );
+});
+
+/* 5. Aviso de ayuda: se dibuja solo si está activado en OPCIONES. */
 
 sinError("Ayuda de controles activada y desactivada", () => {
     const juegoFalso = { ancho: mundo.ancho, alto: mundo.alto, estado: null, jugadores: new Map(), miJugador: () => null, avisoCentral: { tiempo: 0 } };
@@ -399,7 +489,7 @@ sinError("Ayuda de controles activada y desactivada", () => {
     interfaz.dibujar(crearLienzo());
 });
 
-/* 5. Efectos (explosión y partículas). */
+/* 6. Efectos (explosión y partículas). */
 
 sinError("Explosiones, chispas, humo y plumas", () => {
     const explosion = new api.Explosion(400, 300, 60, "#ffb347", 0.7);

@@ -46,6 +46,15 @@ class Juego {
         this.tiempoRestante = 0;
         this.tiempoServidor = 0;
         this.tiempoRecibido = 0;
+
+        /**
+         * Duración total del turno, tal y como la manda el servidor en cada
+         * paquete de estado ("duracionTurno"). La usa el HUD para el anillo de
+         * progreso del reloj: aquí NO hay ninguna copia del número, así que
+         * cambiar la duración en servidor/config.js cambia el reloj de todos.
+         */
+        this.duracionTurno = 0;
+
         this.anguloLocal = 30;
         this.potenciaLocal = CONFIG_CLIENTE.POTENCIA_MINIMA;
         this.cargando = false;
@@ -263,6 +272,11 @@ class Juego {
         this.tiempoServidor = paquete.tiempo;
         this.tiempoRecibido = performance.now();
         this.tiempoRestante = paquete.tiempo;
+
+        // Duración del turno decidida por el servidor (reloj del HUD).
+        if (paquete.duracionTurno > 0) {
+            this.duracionTurno = paquete.duracionTurno;
+        }
 
         this.actualizarJugadores(paquete.jugadores);
         this.actualizarProyectiles(paquete.proyectiles || []);

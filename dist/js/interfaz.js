@@ -4,13 +4,20 @@
  * =========================================================
  *
  * Todo lo que se dibuja aquí son DATOS DEL SERVIDOR:
- *  - Turno actual y cronómetro (10 s) que solo cierra el turno.
+ *  - Turno actual y su reloj. La DURACIÓN del turno la manda el servidor en
+ *    cada paquete de estado ("duracionTurno"): aquí no hay ninguna copia del
+ *    número, así que cambiar servidor/config.js cambia el HUD de todos.
  *  - Viento (afecta a los proyectiles) con dirección e intensidad.
  *  - Lista de los seis jugadores con su vida y sus bajas.
  *  - Potencia y ángulo del jugador local.
  *
  * El HUD se dibuja en coordenadas del canvas (1200x600), así que escala con
- * la ventana exactamente igual que el juego.
+ * la ventana exactamente igual que el juego: todos los paneles quedan dentro
+ * del canvas y por tanto dentro de la pantalla, sea cual sea el tamaño.
+ *
+ * Tarjeta del turno (tres zonas que NUNCA se pisan entre sí):
+ *   [ rótulo: TURNO DE ......... ]
+ *   [ ficha 40 px ][ nombre ]  [ reloj: anillo + segundos ]
  */
 
 class Interfaz {
@@ -104,7 +111,14 @@ class Interfaz {
     }
 
     /**
-     * Tarjeta superior izquierda: de quién es el turno, su dibujo y el tiempo.
+     * Tarjeta superior izquierda: de quién es el turno, su dibujo y su reloj.
+     *
+     * Panel compacto (300 x 92 px del mundo) con tres zonas que nunca se pisan:
+     *  1. Rótulo: "TURNO DE" o "¡ES TU TURNO!".
+     *  2. Ficha del pollito (40 px) y nombre del jugador, recortado midiendo el
+     *     texto real para que jamás invada la zona del reloj.
+     *  3. Zona propia del reloj, arriba a la derecha: anillo de progreso
+     *     pequeño con la esfera y los segundos debajo (nunca un número enorme).
      */
     dibujarTarjetaTurno(ctx) {
         const estado = this.juego.estado;
@@ -114,69 +128,176 @@ class Interfaz {
         }
 
         const actual = this.juego.jugadores.get(estado.turno);
-        const tiempo = this.juego.tiempoRestante;
+
+        /**
+         * Segundos ENTEROS que muestra el reloj (variable SOLO para la interfaz).
+         *
+         * La lógica interna trabaja con decimales a propósito: js/juego.js
+         * calcula `tiempoRestante` con performance.now() para que el tiempo
+         * avance suave entre paquetes del servidor. Ese valor decimal NO se
+         * dibuja nunca: aquí está la ÚNICA conversión a entero de todo el
+         * cronómetro.
+         *   - Math.ceil() redondea hacia arriba: se ve 12 durante todo el
+         *     primer segundo y baja a 11, 10, 9… hasta 0.
+         *   - Math.max(0, ...) impide cualquier número negativo.
+         *   - || 0 protege del primer fotograma (todavía sin datos).
+         */
+        const segundosRestantes = Math.max(0, Math.ceil(this.juego.tiempoRestante || 0));
+
+        // Duración total: la que manda el servidor (aquí no hay copia del número).
+        const total = this.juego.duracionTurno > 0 ? this.juego.duracionTurno : Math.max(1, segundosRestantes);
         const esMio = Boolean(actual) && actual.esLocal;
-        const urgente = tiempo <= 3;
+        const urgente = segundosRestantes <= 3;
         const nombre = actual ? actual.nombre : "Partida terminada";
 
-        this.panel(ctx, 16, 16, 306, 112, esMio ? "rgba(255, 209, 102, 0.95)" : undefined);
+        // Zona propia del reloj (dentro del panel y con margen de sobra).
+        const reloj = { cx: 272, cy: 66, radio: 22 };
+
+        this.panel(ctx, 16, 16, 300, 92, esMio ? "rgba(255, 209, 102, 0.95)" : undefined);
 
         ctx.save();
 
-        // Banda del título: avisa cuando el turno es tuyo.
-        this.banda(ctx, 26, 26, 286, 22);
-        ctx.font = `bold 12px ${this.fuente}`;
+        // 1. Rótulo del turno.
+        this.banda(ctx, 26, 24, 280, 20);
+        ctx.font = `bold 11px ${this.fuente}`;
         ctx.fillStyle = esMio ? "#ffd166" : "#9fe6ff";
-        ctx.fillText(esMio ? "¡ES TU TURNO!" : "TURNO DE", 36, 42);
+        ctx.fillText(esMio ? "¡ES TU TURNO!" : "TURNO DE", 36, 39);
 
-        // Ficha con el dibujo del jugador.
+        // 2. Ficha y nombre del jugador del turno.
         if (actual) {
-            Recursos.dibujarFicha(ctx, actual.indicePersonaje, 34, 56, 46, {
+            Recursos.dibujarFicha(ctx, actual.indicePersonaje, 34, 52, 40, {
                 vivo: true,
                 borde: esMio ? "rgba(255, 209, 102, 0.95)" : "rgba(120, 210, 255, 0.85)"
             });
         }
 
-        // Nombre con contorno.
-        ctx.font = `bold 21px ${this.fuente}`;
+        // El nombre se recorta midiendo el texto real: nunca se monta encima de
+        // la ficha ni de la zona del reloj.
+        const inicioNombre = 84;
+        const anchoNombre = reloj.cx - reloj.radio - 12 - inicioNombre;
+        const etiqueta = this.recortarTexto(ctx, nombre, `bold 18px ${this.fuente}`, anchoNombre);
+
+        ctx.font = `bold 18px ${this.fuente}`;
         ctx.lineJoin = "round";
         ctx.lineWidth = 4;
         ctx.strokeStyle = "rgba(8, 20, 35, 0.85)";
-        const etiqueta = nombre.length > 14 ? `${nombre.slice(0, 13)}…` : nombre;
-        ctx.strokeText(etiqueta, 90, 78);
+        ctx.strokeText(etiqueta, inicioNombre, 76);
         ctx.fillStyle = esMio ? "#ffd166" : "#ffffff";
-        ctx.fillText(etiqueta, 90, 78);
+        ctx.fillText(etiqueta, inicioNombre, 76);
 
-        // Cronómetro grande.
-        ctx.textAlign = "right";
-        ctx.font = `bold 32px ${this.fuente}`;
-        ctx.lineWidth = 5;
-        ctx.strokeText(String(tiempo ?? 0), 308, 86);
-        ctx.fillStyle = urgente ? "#ff8a8a" : "#a8ff72";
-        ctx.fillText(String(tiempo ?? 0), 308, 86);
-        ctx.textAlign = "left";
+        // 3. Reloj pequeño del turno (zona propia, siempre dentro del panel).
+        this.dibujarReloj(ctx, reloj.cx, reloj.cy, reloj.radio, segundosRestantes, total, urgente, esMio);
 
-        // Barra de tiempo.
-        const proporcion = Math.max(0, Math.min(1, (tiempo ?? 0) / 10));
+        ctx.restore();
+    }
 
+    /**
+     * Reloj pequeño con el tiempo restante del turno.
+     *
+     * Dibuja un anillo de progreso que se vacía con el tiempo, una esfera de
+     * reloj con sus agujas y los segundos (enteros) debajo. Todo cabe dentro
+     * del círculo del radio indicado, así que se puede colocar en cualquier
+     * hueco del HUD sin riesgo de salirse ni de tapar a nadie.
+     *
+     * @param {CanvasRenderingContext2D} ctx Contexto de dibujo.
+     * @param {number} cx Centro horizontal del reloj.
+     * @param {number} cy Centro vertical del reloj.
+     * @param {number} radio Radio del anillo.
+     * @param {number} restante Segundos restantes (ya redondeados).
+     * @param {number} total Segundos que dura el turno completo.
+     * @param {boolean} urgente true cuando queda muy poco tiempo.
+     * @param {boolean} esMio true si el turno es del jugador local.
+     */
+    dibujarReloj(ctx, cx, cy, radio, restante, total, urgente, esMio = false) {
+        // Segunda barrera (la primera está en dibujarTarjetaTurno): aquí se
+        // vuelve a garantizar que el número dibujado es un entero. Aunque
+        // alguien pasara 11.932421, el reloj enseñaría 12.
+        const segundos = Math.max(0, Math.ceil(restante || 0));
+        const fraccion = total > 0 ? Math.max(0, Math.min(1, segundos / total)) : 0;
+        const latido = urgente ? 1 + Math.sin(Date.now() / 165) * 0.05 : 1;
+        const color = urgente ? "#ff6b6b" : fraccion > 0.5 ? "#a8ff72" : "#ffd166";
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(latido, latido);
+
+        // Fondo y carril del anillo.
         ctx.beginPath();
-        ctx.roundRect(90, 106, 222, 10, 5);
-        ctx.fillStyle = "rgba(6, 18, 30, 0.85)";
+        ctx.arc(0, 0, radio, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(6, 18, 30, 0.9)";
         ctx.fill();
 
-        if (proporcion > 0.02) {
-            ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, 0, radio, 0, Math.PI * 2);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "rgba(159, 230, 255, 0.22)";
+        ctx.stroke();
+
+        // Tiempo restante: arco que se vacía como un reloj de verdad.
+        if (fraccion > 0.002) {
             ctx.beginPath();
-            ctx.roundRect(92, 108, 218 * proporcion, 6, 3);
-            ctx.clip();
-            ctx.fillStyle = urgente ? "#ff6b6b" : "#62e6ff";
-            ctx.fillRect(92, 108, 218, 6);
-            ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-            ctx.fillRect(92, 108, 218, 2);
-            ctx.restore();
+            ctx.arc(0, 0, radio, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fraccion);
+            ctx.lineWidth = 4;
+            ctx.lineCap = "round";
+            ctx.strokeStyle = color;
+            ctx.stroke();
+        }
+
+        // Esfera del reloj con sus agujas.
+        ctx.beginPath();
+        ctx.arc(0, -5, 8, 0, Math.PI * 2);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = esMio ? "#ffd166" : "#eaf6ff";
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, -5);
+        ctx.lineTo(0, -11.5);
+        ctx.moveTo(0, -5);
+        ctx.lineTo(5, -3);
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = "round";
+        ctx.strokeStyle = color;
+        ctx.stroke();
+
+        // Segundos restantes: número entero y pequeño bajo la esfera.
+        ctx.font = `bold 13px ${this.fuente}`;
+        ctx.textAlign = "center";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(8, 20, 35, 0.9)";
+        ctx.strokeText(String(segundos), 0, 15);
+        ctx.fillStyle = urgente ? "#ff8a8a" : "#ffffff";
+        ctx.fillText(String(segundos), 0, 15);
+
+        ctx.restore();
+    }
+
+    /**
+     * Recorta un texto con puntos suspensivos para que quepa en un ancho dado.
+     *
+     * Mide el texto de verdad (no cuenta letras), así que los nombres largos y
+     * los cortos se comportan igual de bien y nunca se sale del hueco.
+     *
+     * @param {CanvasRenderingContext2D} ctx Contexto de dibujo.
+     * @param {string} texto Texto original.
+     * @param {string} fuente Fuente (con su tamaño) con la que se dibujará.
+     * @param {number} anchoMaximo Ancho disponible en píxeles del mundo.
+     * @returns {string} Texto que entra en ese ancho.
+     */
+    recortarTexto(ctx, texto, fuente, anchoMaximo) {
+        ctx.save();
+        ctx.font = fuente;
+
+        let recortado = texto;
+
+        while (recortado.length > 1 && ctx.measureText(`${recortado}…`).width > anchoMaximo) {
+            recortado = recortado.slice(0, -1);
         }
 
         ctx.restore();
+
+        return recortado === texto ? texto : `${recortado}…`;
     }
 
     /**

@@ -16,13 +16,15 @@
  *  - Explosión de radio 60 (terreno) / 65 (personaje) con daño
  *    100 * (1 - distancia / radio).
  *  - Muerte al caer al agua (y > 560).
- *  - Turnos de 10 segundos que SOLO cierran el turno.
+ *  - Turnos que SOLO cierran el turno. La duración vive en un único sitio,
+ *    CONFIG.DURACION_TURNO (hoy 12 segundos), y viaja al cliente en cada
+ *    paquete de estado para que el reloj del HUD use la misma.
  *
  * Cambios justificados respecto al original:
  *  - El terreno ahora es destruible de verdad (cráteres en la rejilla).
  *  - El turno avanza 1 segundo después de resolverse el disparo en lugar de
  *    esperar a que el cronómetro llegue a cero: con seis jugadores humanos
- *    esperar los 10 segundos completos en cada turno haría la partida lenta.
+ *    esperar el turno completo en cada jugada haría la partida lenta.
  *  - La partida termina cuando queda un único superviviente (antes eran dos
  *    equipos; ahora son seis jugadores en batalla libre).
  */
@@ -1054,6 +1056,9 @@ class Partida {
             estado: this.estado,
             turno: this.turno,
             tiempo: Math.max(0, Math.ceil(this.tiempoTurno)),
+            // Duración total del turno: el HUD la usa para pintar el reloj
+            // (anillo de progreso) sin tener una copia propia del número.
+            duracionTurno: CONFIG.DURACION_TURNO,
             numeroTurno: this.numeroTurno,
             viento: this.redondear(this.viento),
             jugadores: this.listaJugadores().map((jugador) => this.serializarJugador(jugador)),
