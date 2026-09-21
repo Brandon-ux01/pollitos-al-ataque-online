@@ -1,26 +1,43 @@
 {
-  "name": "pollitos-al-ataque",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "pollitos-al-ataque-online",
+  "version": "2.0.0",
+  "description": "Pollitos al Ataque - versión multijugador online para 6 jugadores (Node.js + Express + Socket.IO con servidor autoritativo).",
+  "main": "servidor/servidor.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run build",
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "preview": "vite preview",
+    "server": "node servidor/servidor.js",
+    "start": "node servidor/servidor.js",
+    "iniciar": "node utilidades/iniciar_todo.js",
+    "sonidos": "node utilidades/verificar_sonidos.js",
+    "salas": "node utilidades/probar_salas.js",
+    "motor": "node utilidades/probar_motor.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Brandon-ux01/pollitos-al-ataque.git"
+    "url": "git+https://github.com/Brandon-ux01/pollitos-al-ataque-online.git"
   },
-  "keywords": [],
+  "keywords": [
+    "juego",
+    "multijugador",
+    "socket.io",
+    "canvas",
+    "pollitos"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/Brandon-ux01/pollitos-al-ataque/issues"
+    "url": "https://github.com/Brandon-ux01/pollitos-al-ataque-online/issues"
   },
-  "homepage": "https://github.com/Brandon-ux01/pollitos-al-ataque#readme",
+  "homepage": "https://github.com/Brandon-ux01/pollitos-al-ataque-online#readme",
   "devDependencies": {
     "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
   }
 }
