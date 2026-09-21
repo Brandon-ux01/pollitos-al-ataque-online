@@ -665,7 +665,7 @@ class Juego {
         }
 
         this.terreno.dibujar(ctx);
-        this.escenario.dibujarDecoracion(ctx, this.terreno.plataformas);
+        this.escenario.dibujarDecoracion(ctx, this.terreno.plataformas, this.terreno);
         this.escenario.dibujarMar(ctx);
 
         // Personajes ordenados por personaje para que el dibujo sea estable.

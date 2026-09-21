@@ -12,7 +12,7 @@
  * publicar en cualquier hosting estático o para servirlo desde Express.
  *
  * En desarrollo no hace falta nada especial: "npm run dev" sirve el cliente
- * y el cliente se conecta al servidor de Socket.IO (puerto 3001).
+ * y el cliente se conecta al servidor de Socket.IO (puerto 3210).
  */
 
 const fs = require("node:fs");

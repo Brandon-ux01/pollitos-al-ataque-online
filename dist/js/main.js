@@ -120,7 +120,7 @@ function estadoConexion(texto, clase = "") {
 /**
  * Refresca el estado de conexión con el estado real del socket.
  *
- * Evita el clásico "Conectando con http://localhost:3001..." eterno cuando el
+ * Evita el clásico "Conectando con http://localhost:3210..." eterno cuando el
  * servidor está apagado.
  */
 function refrescarEstadoConexion() {
@@ -371,6 +371,9 @@ function escaparHtml(texto) {
 /**
  * Genera los botones para elegir personaje (solo en mi propio espacio).
  *
+ * Cada botón muestra el DIBUJO real del pollito (no un color), así se elige
+ * viendo lo que se va a ver en la arena.
+ *
  * @param {object} estado Paquete del lobby.
  * @param {number} actual Personaje que tengo ahora.
  * @returns {string} HTML del selector.
@@ -383,11 +386,27 @@ function crearSelectorPersonajes(estado, actual) {
 
     const botones = personajes.map((personaje) => {
         const ocupado = ocupados.has(personaje.id);
-        const clases = personaje.id === actual ? "activo" : "";
-        const titulo = ocupado ? `${personaje.nombre} (elegido por otro jugador)` : personaje.nombre;
+        const clases = ["opcion-personaje"];
 
-        return `<button class="${clases}" data-personaje="${personaje.id}" title="${titulo}"
-            style="background:${personaje.cuerpo};${ocupado ? "opacity:.35;cursor:not-allowed;" : ""}"></button>`;
+        if (personaje.id === actual) {
+            clases.push("activo");
+        }
+
+        if (ocupado) {
+            clases.push("ocupado");
+        }
+
+        const titulo = ocupado
+            ? `${personaje.nombre} (elegido por otro jugador)`
+            : `Elegir ${personaje.nombre}`;
+        const corto = personaje.nombre.replace("Pollito ", "");
+        const ruta = Recursos.rutaPollitoCompleta(personaje.id, "quieto");
+
+        return `<button class="${clases.join(" ")}" type="button" data-personaje="${personaje.id}"
+            title="${escaparHtml(titulo)}" aria-label="${escaparHtml(titulo)}"${ocupado ? " disabled" : ""}>
+            <img src="${ruta}" alt="${escaparHtml(personaje.nombre)}">
+            <span>${escaparHtml(corto)}</span>
+        </button>`;
     }).join("");
 
     return `<div class="selector-personaje">${botones}</div>`;
@@ -426,14 +445,12 @@ function dibujarLobby(estado) {
         if (!jugador) {
             clases.push("vacio");
 
+            // Espacio libre: el arte del propio juego ("ESPERA") en lugar de un
+            // avatar, así se ve de un vistazo quién falta por entrar.
             return `
                 <article class="${clases.join(" ")}">
                     <span class="numero-slot">${posicion + 1}</span>
-                    <span class="avatar">🥚</span>
-                    <div>
-                        <strong>JUGADOR ${posicion + 1}</strong>
-                        <small>ESPERANDO</small>
-                    </div>
+                    <img class="arte-espera" src="assets/imagenes/interfaz/botones/espera.png" alt="Esperando jugador">
                     <span class="insignia esperando">LIBRE</span>
                 </article>`;
         }
@@ -448,11 +465,12 @@ function dibujarLobby(estado) {
 
         const selector = esMio ? crearSelectorPersonajes(estado, jugador.personaje) : "";
         const estadoTexto = esMio ? "TÚ · CONECTADO" : jugador.listo ? "LISTO" : "CONECTADO";
+        const retrato = Recursos.rutaPollitoCompleta(jugador.personaje, "quieto");
 
         return `
             <article class="${clases.join(" ")}">
                 <span class="numero-slot">${posicion + 1}</span>
-                <span class="avatar">🐔</span>
+                <span class="avatar-arte"><img src="${retrato}" alt=""></span>
                 <div>
                     <strong>${esMio ? "TÚ · " : `JUGADOR ${posicion + 1} · `}${escaparHtml(jugador.nombre)}</strong>
                     <small>${escaparHtml(nombrePersonaje(jugador.personaje))} · ${estadoTexto}</small>
@@ -749,9 +767,73 @@ window.redJuego.al("partida", (paquete) => {
 });
 
 /* ---------------------------------------------------------
+   Dibujos del juego y botón de sonido
+   --------------------------------------------------------- */
+
+/**
+ * Refresca el icono del botón de sonido según las preferencias guardadas.
+ *
+ * El icono sale del arte del juego: el altavoz cuando hay sonido y la barrera
+ * cuando está todo silenciado (que es justo lo que significa "bloqueado").
+ */
+function refrescarBotonSonido() {
+    const preferencias = window.sonidoJuego.leerPreferencias();
+    const silenciado = !preferencias.musicaActivada && !preferencias.efectosActivados;
+    const boton = document.getElementById("btn-sonido");
+
+    document.getElementById("icono-sonido").src = silenciado
+        ? "assets/imagenes/interfaz/botones/icono_barrera.png"
+        : "assets/imagenes/interfaz/botones/icono_sonido.png";
+
+    boton.classList.toggle("silenciado", silenciado);
+    boton.title = silenciado ? "Sonido silenciado: pulsa para activarlo" : "Silenciar el sonido";
+}
+
+document.getElementById("btn-sonido").addEventListener("click", () => {
+    const preferencias = window.sonidoJuego.leerPreferencias();
+    const silenciado = !preferencias.musicaActivada && !preferencias.efectosActivados;
+    const activar = silenciado;
+
+    // El audio tiene un único dueño (window.sonidoJuego): aquí solo se le pide.
+    window.sonidoJuego.activarMusica(activar);
+    window.sonidoJuego.activarEfectos(activar);
+
+    if (activar) {
+        window.sonidoJuego.reproducirMusicaDelMenuSiProcede();
+        avisar("Sonido activado.", "exito");
+    } else {
+        window.sonidoJuego.detenerMusica();
+        avisar("Sonido silenciado.", "info");
+    }
+
+    refrescarBotonSonido();
+});
+
+/**
+ * Pide todos los dibujos del juego.
+ *
+ * No bloquea nada: los que tarden aparecen en cuanto llegan y, mientras
+ * tanto, cada sistema dibuja su versión de respaldo. Se pide aquí, una sola
+ * vez, para que el menú y la partida compartan las mismas imágenes.
+ */
+function precargarDibujos() {
+    Recursos.precargarTodo();
+
+    // Los retratos del lobby se usan en cuanto se entra en una sala: se piden
+    // ya para que no aparezcan en blanco.
+    (window.paletasPersonajes || []).forEach((personaje) => {
+        Recursos.pedir(Recursos.rutaPollito(personaje.id, "quieto"));
+    });
+
+    console.log(`[ARTE] ${Recursos.pedidas} dibujos pedidos a assets/imagenes/.`);
+}
+
+/* ---------------------------------------------------------
    Estado inicial
    --------------------------------------------------------- */
 
+precargarDibujos();
+refrescarBotonSonido();
 mostrarPantalla("menu");
 refrescarEstadoConexion();
 

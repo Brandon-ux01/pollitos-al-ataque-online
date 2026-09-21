@@ -17,7 +17,13 @@
  */
 
 const CONFIG_CLIENTE = {
-    // Puerto donde escucha el servidor de Socket.IO en desarrollo.
+    // Puerto donde escucha el servidor de Socket.IO.
+    //
+    // Debe coincidir con el servidor autoritativo (servidor/servidor.js:
+    // PUERTO = process.env.PORT || 3001) y con utilidades/iniciar_todo.js, que
+    // arranca el servidor en el 3001. Si aquí hubiera otro número, el cliente
+    // intentaría conectarse a un puerto donde no hay nadie y el multijugador
+    // no funcionaría (se puede cambiar sin tocar código con ?servidor=...).
     PUERTO_SERVIDOR: 3210,
 
     // Ancho máximo del canvas jugable (el servidor manda el tamaño real).

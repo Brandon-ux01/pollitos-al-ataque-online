@@ -117,12 +117,22 @@ class Terreno {
     /**
      * Dibuja el terreno por columnas, uniendo celdas contiguas en rectángulos.
      *
+     * Estilo de dibujo animado, en tres pasadas:
+     *  1. Tierra marrón con piedrecitas y césped verde en la superficie.
+     *  2. Contorno oscuro alrededor de toda la silueta (el "borde de tinta").
+     *  3. Brillo claro en el borde del césped.
+     *
+     * Los agujeros de las explosiones se ven al momento: los cráteres ya están
+     * aplicados en la rejilla (los aplica el servidor y los repite el cliente).
+     *
      * @param {CanvasRenderingContext2D} ctx Contexto de dibujo.
      */
     dibujar(ctx) {
         const celda = this.celda;
 
         ctx.save();
+
+        // --- 1. Tierra, césped y piedrecitas ---------------------------------
 
         for (let columna = 0; columna < this.columnas; columna++) {
             let fila = 0;
@@ -143,27 +153,85 @@ class Terreno {
                 const y = fila * celda;
                 const altoTramo = (fin - fila + 1) * celda;
 
-                // Cuerpo de tierra (dos tonos para dar textura).
-                ctx.fillStyle = this.ruido(columna, fila) > 0.5 ? "#7b5c33" : "#755431";
+                // Cuerpo de tierra: dos tonos que se alternan para dar textura.
+                ctx.fillStyle = this.ruido(columna, fila) > 0.5 ? "#a9662f" : "#9c5c2a";
                 ctx.fillRect(x, y, celda, altoTramo);
+
+                // Piedrecitas (solo en tramos hondos, para no llenar la pantalla).
+                if (altoTramo > celda * 3) {
+                    const grano = this.ruido(columna * 3, fin * 5);
+
+                    if (grano > 0.68) {
+                        ctx.fillStyle = "rgba(72, 42, 18, 0.45)";
+                        ctx.fillRect(x + 1.5, y + altoTramo - celda * 2 + 2, 3.5, 3.5);
+                    }
+
+                    if (grano < 0.18) {
+                        ctx.fillStyle = "rgba(255, 226, 176, 0.22)";
+                        ctx.fillRect(x + 2, y + altoTramo - celda - 5, 3, 3);
+                    }
+                }
 
                 // Césped en las celdas con aire encima (superficie visible).
                 if (!this.esSolido(columna, fila - 1)) {
-                    ctx.fillStyle = "#3f7a46";
-                    ctx.fillRect(x, y, celda, Math.min(10, celda + 2));
-                    ctx.fillStyle = "#58a25d";
-                    ctx.fillRect(x, y, celda, 4);
-                }
+                    const hierba = celda + 3;
 
-                // Motas decorativas para dar volumen a la tierra.
-                if (this.ruido(columna, fin) > 0.72 && altoTramo > celda * 2) {
-                    ctx.fillStyle = "rgba(60, 38, 20, 0.5)";
-                    ctx.fillRect(x + 2, y + altoTramo - celda - 4, 4, 4);
+                    ctx.fillStyle = "#37902c";
+                    ctx.fillRect(x, y, celda, hierba);
+                    ctx.fillStyle = "#4fbf3d";
+                    ctx.fillRect(x, y, celda, hierba - 3);
+                    ctx.fillStyle = "#7ee05c";
+                    ctx.fillRect(x, y, celda, 3);
                 }
 
                 fila = fin + 1;
             }
         }
+
+        // --- 2. Contorno oscuro de la silueta --------------------------------
+
+        ctx.beginPath();
+
+        for (let columna = 0; columna < this.columnas; columna++) {
+            for (let fila = 0; fila < this.filas; fila++) {
+                if (!this.esSolido(columna, fila)) {
+                    continue;
+                }
+
+                const x = columna * celda;
+                const y = fila * celda;
+
+                // Cara superior.
+                if (!this.esSolido(columna, fila - 1)) {
+                    ctx.moveTo(x, y + 1.5);
+                    ctx.lineTo(x + celda, y + 1.5);
+                }
+
+                // Cara inferior (bloques que quedan colgando).
+                if (!this.esSolido(columna, fila + 1)) {
+                    ctx.moveTo(x, y + celda - 1.5);
+                    ctx.lineTo(x + celda, y + celda - 1.5);
+                }
+
+                // Cara izquierda.
+                if (!this.esSolido(columna - 1, fila)) {
+                    ctx.moveTo(x + 1.5, y);
+                    ctx.lineTo(x + 1.5, y + celda);
+                }
+
+                // Cara derecha.
+                if (!this.esSolido(columna + 1, fila)) {
+                    ctx.moveTo(x + celda - 1.5, y);
+                    ctx.lineTo(x + celda - 1.5, y + celda);
+                }
+            }
+        }
+
+        ctx.lineWidth = 3;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "rgba(24, 40, 26, 0.75)";
+        ctx.stroke();
 
         ctx.restore();
     }

@@ -12,6 +12,8 @@
     "start": "node servidor/servidor.js",
     "iniciar": "node utilidades/iniciar_todo.js",
     "sonidos": "node utilidades/verificar_sonidos.js",
+    "arte": "node utilidades/verificar_arte.js",
+    "dibujo": "node utilidades/prueba_dibujo.js",
     "salas": "node utilidades/probar_salas.js",
     "motor": "node utilidades/probar_motor.js"
   },

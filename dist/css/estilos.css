@@ -1019,3 +1019,601 @@ input:not([type="checkbox"]):not([type="range"]):focus {
         display: none;
     }
 }
+
+/* =========================================================
+   10. ESTILO DE DIBUJOS ANIMADOS (arte del juego)
+   =========================================================
+   Esta sección da el aspecto de videojuego de dibujos animados usando las
+   láminas de assets/imagenes/:
+
+     - escenarios/fondo_menu.png ....... fondo del menú (logotipo incluido)
+     - interfaz/botones/*.png .......... botones con su texto ya dibujado
+     - interfaz/hud/chip_avatar.png .... retrato del pollito clásico
+     - interfaz/resultados/*.png ....... carteles de victoria y derrota
+     - personajes/<clave>/*.png ........ dibujos de los seis pollitos
+
+   Reglas del estilo: contornos oscuros gruesos, sombras duras (desplazadas, sin
+   difuminado), esquinas muy redondeadas y colores vivos. Los botones con el
+   texto dibujado dentro (interfaz/botones) se colocan como imagen y no llevan
+   texto en el HTML: así no hay dos textos escritos a la vez.
+   ========================================================= */
+
+:root {
+    --tinta: #0b1a2b;
+    --tinta-suave: #14314f;
+    --panel-arriba: #1d4f7c;
+    --panel-abajo: #10304d;
+    --oro: #ffd166;
+    --cristal: #9fe6ff;
+    --verde: #a8ff72;
+    --rojo: #ff8a8a;
+    --sombra-dura: 0 8px 0 rgba(8, 20, 35, 0.75);
+}
+
+body {
+    background: #0a1c30;
+}
+
+/* --- Fondo del menú ------------------------------------------------------ */
+
+.fondo {
+    background-color: #6ec9f5;
+    background-image: url("../assets/imagenes/escenarios/fondo_menu.png");
+    background-size: cover;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+}
+
+.fondo-velo {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(6, 22, 38, 0.05) 0%, rgba(6, 22, 38, 0.18) 55%, rgba(6, 22, 38, 0.5) 100%);
+}
+
+.fondo-rayos {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(58% 42% at 50% 14%, rgba(255, 246, 201, 0.35), rgba(255, 246, 201, 0) 72%);
+    pointer-events: none;
+}
+
+/* --- Tarjetas ----------------------------------------------------------- */
+
+.tarjeta {
+    border: 4px solid var(--tinta);
+    border-radius: 28px;
+    background: linear-gradient(180deg, var(--panel-arriba), var(--panel-abajo));
+    box-shadow: 0 10px 0 rgba(6, 18, 30, 0.85),
+        inset 0 3px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -4px 0 rgba(0, 0, 0, 0.22);
+}
+
+.tarjeta-menu {
+    width: min(100%, 620px);
+}
+
+/* El menú se apoya en la parte baja para que el logotipo del fondo se vea. */
+.pantalla-menu {
+    justify-content: flex-end;
+}
+
+.marca {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--oro);
+    font-size: 14px;
+    text-shadow: 0 2px 0 rgba(6, 18, 30, 0.8);
+}
+
+.marca-avatar {
+    width: clamp(34px, 5vh, 44px);
+    height: clamp(34px, 5vh, 44px);
+    border-radius: 30%;
+    border: 3px solid var(--tinta);
+    box-shadow: 0 3px 0 rgba(6, 18, 30, 0.75);
+    background: #0d2740;
+}
+
+.titulo-pantalla {
+    color: var(--oro);
+    text-shadow: 0 3px 0 rgba(6, 18, 30, 0.85);
+}
+
+.subtitulo {
+    color: var(--cristal);
+}
+
+label {
+    color: var(--cristal);
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+input:not([type="checkbox"]):not([type="range"]) {
+    border: 3px solid var(--tinta);
+    border-radius: 14px;
+    background: rgba(4, 16, 28, 0.85);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08);
+}
+
+input:not([type="checkbox"]):not([type="range"]):focus {
+    border-color: var(--cristal);
+    box-shadow: 0 0 0 3px rgba(159, 230, 255, 0.25);
+}
+
+.estado-conexion {
+    color: var(--cristal);
+}
+
+/* --- Botones ------------------------------------------------------------ */
+
+/* Menú en dos columnas: los botones del arte son muy anchos y bajos, así que
+   repartidos de dos en dos no ocupan media pantalla. JUGAR ocupa las dos. */
+.menu {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(8px, 1.4vh, 12px);
+    margin-top: clamp(10px, 2vh, 18px);
+}
+
+#btn-jugar-online {
+    grid-column: 1 / -1;
+}
+
+.boton-menu {
+    padding: clamp(10px, 1.7vh, 15px) clamp(12px, 1.8vw, 18px);
+    border: 3px solid var(--tinta);
+    border-radius: 16px;
+    background: linear-gradient(180deg, #2a6b9e, #143b5c);
+    color: #ffffff;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 0 rgba(6, 18, 30, 0.8);
+    box-shadow: 0 6px 0 rgba(6, 18, 30, 0.8), inset 0 2px 0 rgba(255, 255, 255, 0.22);
+}
+
+.boton-menu:hover {
+    transform: translateY(-2px);
+    border-color: var(--tinta);
+    filter: brightness(1.08);
+    box-shadow: 0 8px 0 rgba(6, 18, 30, 0.8), inset 0 2px 0 rgba(255, 255, 255, 0.28);
+}
+
+.boton-menu:active {
+    transform: translateY(3px);
+    box-shadow: 0 2px 0 rgba(6, 18, 30, 0.8), inset 0 2px 0 rgba(255, 255, 255, 0.2);
+}
+
+.boton-menu:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    transform: none;
+    box-shadow: 0 4px 0 rgba(6, 18, 30, 0.6);
+}
+
+.boton-destacado {
+    border-color: var(--tinta);
+    background: linear-gradient(180deg, #ffd166, #f08c1a);
+    color: #3a1d00;
+    text-shadow: 0 2px 0 rgba(255, 255, 255, 0.45);
+}
+
+/* Botones con el texto ya dibujado en la imagen del arte. */
+.boton-arte {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(4px, 0.9vh, 8px);
+    border: none;
+    border-radius: 20px;
+    background: none;
+    box-shadow: none;
+    filter: drop-shadow(0 5px 0 rgba(6, 18, 30, 0.65));
+    transition: transform 0.15s, filter 0.2s;
+}
+
+.boton-arte img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: clamp(46px, 8.6vh, 76px);
+}
+
+.boton-arte:hover {
+    transform: translateY(-3px) scale(1.02);
+    filter: brightness(1.08) drop-shadow(0 8px 0 rgba(6, 18, 30, 0.65));
+}
+
+.boton-arte:active {
+    transform: translateY(3px);
+    filter: drop-shadow(0 2px 0 rgba(6, 18, 30, 0.7));
+}
+
+.boton-arte:disabled img {
+    filter: grayscale(0.55) brightness(0.8);
+}
+
+.boton-mini {
+    border: 3px solid var(--tinta);
+    border-radius: 12px;
+    background: linear-gradient(180deg, #2a6b9e, #143b5c);
+    color: #ffffff;
+    box-shadow: 0 4px 0 rgba(6, 18, 30, 0.8);
+}
+
+.boton-mini:hover {
+    border-color: var(--tinta);
+    filter: brightness(1.1);
+}
+
+.pista-menu strong {
+    color: var(--oro);
+}
+
+.pista-menu,
+.pista-opciones,
+.pista-lobby {
+    color: #d8ecff;
+}
+
+/* --- Botón de sonido ---------------------------------------------------- */
+
+.boton-sonido {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 30;
+    width: clamp(44px, 7vh, 58px);
+    height: clamp(44px, 7vh, 58px);
+    padding: 0;
+    border: 3px solid var(--tinta);
+    border-radius: 50%;
+    background: linear-gradient(180deg, #2a6b9e, #143b5c);
+    box-shadow: 0 5px 0 rgba(6, 18, 30, 0.75);
+    cursor: pointer;
+    transition: transform 0.15s, filter 0.2s;
+}
+
+.boton-sonido img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: block;
+}
+
+.boton-sonido:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+.boton-sonido:active {
+    transform: translateY(2px);
+}
+
+.boton-sonido.silenciado {
+    filter: grayscale(0.75);
+}
+
+/* Durante la partida el botón estorba (el HUD ya llega hasta el borde). */
+#pantalla-juego:not([hidden]) ~ .boton-sonido {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* --- Lobby -------------------------------------------------------------- */
+
+.cabecera-lobby {
+    border: 4px solid var(--tinta);
+    border-radius: 24px;
+    background: linear-gradient(180deg, var(--panel-arriba), var(--panel-abajo));
+    box-shadow: 0 8px 0 rgba(6, 18, 30, 0.8);
+}
+
+.arte-lobby {
+    width: clamp(120px, 16vw, 190px);
+    height: auto;
+    filter: drop-shadow(0 5px 0 rgba(6, 18, 30, 0.6));
+}
+
+.titulo-lobby {
+    flex: 1 1 auto;
+}
+
+.info-sala {
+    border: 3px dashed rgba(159, 230, 255, 0.55);
+    border-radius: 16px;
+    background: rgba(4, 16, 28, 0.7);
+}
+
+.info-sala strong {
+    color: var(--oro);
+    text-shadow: 0 3px 0 rgba(6, 18, 30, 0.8);
+}
+
+.contador,
+.aviso-sala {
+    border: 3px solid var(--tinta);
+    background: linear-gradient(180deg, #2f7a44, #1c5730);
+    color: #eaffd6;
+    box-shadow: 0 4px 0 rgba(6, 18, 30, 0.7);
+}
+
+.lista-jugadores {
+    gap: clamp(8px, 1.4vh, 16px);
+}
+
+.jugador-slot {
+    min-height: clamp(88px, 13vh, 118px);
+    border: 4px solid var(--tinta);
+    border-radius: 22px;
+    background: linear-gradient(180deg, var(--panel-arriba), var(--panel-abajo));
+    box-shadow: 0 8px 0 rgba(6, 18, 30, 0.8), inset 0 3px 0 rgba(255, 255, 255, 0.16);
+}
+
+.jugador-slot.vacio {
+    border-style: dashed;
+    border-color: rgba(159, 230, 255, 0.45);
+    background: rgba(8, 30, 50, 0.55);
+    opacity: 1;
+}
+
+.jugador-slot.mio {
+    border-color: var(--oro);
+    box-shadow: 0 8px 0 rgba(6, 18, 30, 0.8), 0 0 0 4px rgba(255, 209, 102, 0.25);
+}
+
+.jugador-slot.listo {
+    border-color: var(--verde);
+}
+
+.numero-slot {
+    width: clamp(34px, 5vh, 44px);
+    height: clamp(34px, 5vh, 44px);
+    border: 3px solid var(--tinta);
+    background: linear-gradient(180deg, #2a6b9e, #143b5c);
+    color: var(--oro);
+    box-shadow: 0 3px 0 rgba(6, 18, 30, 0.7);
+}
+
+/* Retrato del pollito que ha elegido cada jugador. */
+.avatar-arte {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: clamp(44px, 7vh, 62px);
+    height: clamp(44px, 7vh, 62px);
+    border: 3px solid var(--tinta);
+    border-radius: 30%;
+    background: radial-gradient(circle at 50% 30%, #1d4f7c, #0d2740);
+    box-shadow: 0 4px 0 rgba(6, 18, 30, 0.7);
+    overflow: hidden;
+}
+
+.avatar-arte img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Cartel "ESPERA" del arte para los espacios libres. */
+.arte-espera {
+    width: clamp(110px, 20vw, 180px);
+    height: auto;
+    opacity: 0.9;
+    filter: drop-shadow(0 4px 0 rgba(6, 18, 30, 0.6));
+}
+
+.jugador-slot.vacio .numero-slot {
+    opacity: 0.75;
+}
+
+.jugador-slot strong {
+    color: #ffffff;
+    text-shadow: 0 2px 0 rgba(6, 18, 30, 0.75);
+}
+
+.jugador-slot small {
+    color: var(--cristal);
+}
+
+.insignia {
+    border: 3px solid var(--tinta);
+    box-shadow: 0 3px 0 rgba(6, 18, 30, 0.7);
+}
+
+.insignia.conectado {
+    background: linear-gradient(180deg, #2f7a44, #1c5730);
+    color: #eaffd6;
+}
+
+.insignia.listo {
+    background: linear-gradient(180deg, #2a6b9e, #143b5c);
+    color: var(--cristal);
+}
+
+.insignia.esperando {
+    background: linear-gradient(180deg, #2a6b9e, #143b5c);
+    color: #cfe6f5;
+}
+
+/* --- Selector de personaje (con el dibujo de cada pollito) -------------- */
+
+.selector-personaje {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.selector-personaje .opcion-personaje {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: 54px;
+    padding: 3px 2px;
+    border: 3px solid var(--tinta);
+    border-radius: 12px;
+    background: rgba(4, 16, 28, 0.7);
+    color: #cfe6f5;
+    font: inherit;
+    font-size: 9px;
+    line-height: 1.1;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.selector-personaje .opcion-personaje img {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+}
+
+.selector-personaje .opcion-personaje:hover {
+    transform: translateY(-3px);
+    border-color: var(--cristal);
+}
+
+.selector-personaje .opcion-personaje.activo {
+    border-color: var(--oro);
+    background: rgba(255, 209, 102, 0.2);
+    box-shadow: 0 0 0 2px rgba(255, 209, 102, 0.35);
+}
+
+.selector-personaje .opcion-personaje.ocupado {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* --- Pantalla final ----------------------------------------------------- */
+
+.pantalla-final {
+    background: rgba(4, 12, 22, 0.7);
+}
+
+.panel-final {
+    border: 4px solid var(--tinta);
+    border-radius: 28px;
+    background-color: #10304d;
+    background-image: linear-gradient(180deg, rgba(9, 30, 50, 0.82), rgba(4, 14, 26, 0.94)),
+        url("../assets/imagenes/interfaz/resultados/victoria.png");
+    background-size: cover, cover;
+    background-position: center, center;
+    box-shadow: 0 12px 0 rgba(6, 18, 30, 0.85), inset 0 3px 0 rgba(255, 255, 255, 0.16);
+}
+
+.panel-final.derrota {
+    background-image: linear-gradient(180deg, rgba(24, 10, 12, 0.82), rgba(12, 6, 10, 0.94)),
+        url("../assets/imagenes/interfaz/resultados/derrota.png");
+}
+
+.panel-final h2 {
+    color: var(--oro);
+    text-shadow: 0 4px 0 rgba(6, 18, 30, 0.9), 0 0 22px rgba(255, 209, 102, 0.35);
+}
+
+.panel-final.derrota h2 {
+    color: var(--rojo);
+    text-shadow: 0 4px 0 rgba(6, 18, 30, 0.9), 0 0 22px rgba(255, 138, 138, 0.35);
+}
+
+.fila-estadistica {
+    border: 3px solid var(--tinta);
+    background: rgba(6, 22, 38, 0.75);
+    color: #eaf6ff;
+}
+
+.fila-estadistica.encabezado {
+    border-color: rgba(159, 230, 255, 0.6);
+    background: rgba(6, 22, 38, 0.9);
+    color: var(--cristal);
+}
+
+.fila-estadistica.ganador {
+    border-color: var(--oro);
+    background: rgba(255, 209, 102, 0.15);
+}
+
+.boton-flotante {
+    border: 3px solid var(--tinta);
+    border-radius: 14px;
+    background: rgba(8, 28, 46, 0.9);
+    color: #eaf6ff;
+    box-shadow: 0 4px 0 rgba(6, 18, 30, 0.75);
+}
+
+.boton-flotante:hover {
+    border-color: var(--rojo);
+    background: rgba(60, 16, 22, 0.9);
+}
+
+/* --- Avisos flotantes --------------------------------------------------- */
+
+.aviso {
+    border: 3px solid var(--tinta);
+    border-left-width: 8px;
+    border-radius: 16px;
+    background: rgba(10, 32, 52, 0.96);
+    color: #eaf6ff;
+    font-weight: bold;
+    box-shadow: 0 6px 0 rgba(6, 18, 30, 0.7);
+}
+
+/* --- Ajustes finales para ventanas pequeñas o bajas --------------------- */
+
+@media (max-width: 720px) {
+    .menu {
+        grid-template-columns: 1fr;
+    }
+
+    .arte-lobby {
+        width: clamp(100px, 34vw, 150px);
+    }
+}
+
+@media (max-height: 760px) {
+    .tarjeta {
+        padding: clamp(12px, 2vh, 20px) clamp(14px, 2.6vw, 24px);
+        border-radius: 22px;
+    }
+
+    .marca-avatar {
+        width: 32px;
+        height: 32px;
+    }
+
+    .pista-menu,
+    .pista-opciones {
+        margin-top: 8px;
+        line-height: 1.4;
+    }
+
+    .boton-arte img {
+        max-height: clamp(44px, 8vh, 62px);
+    }
+
+    .jugador-slot {
+        min-height: 74px;
+    }
+}
+
+@media (max-height: 620px) {
+    .pista-menu {
+        display: none;
+    }
+
+    .boton-arte img {
+        max-height: 46px;
+    }
+
+    .arte-lobby {
+        display: none;
+    }
+
+    .arte-espera {
+        width: 96px;
+    }
+}

@@ -9,46 +9,36 @@
  * servidor y llega al cliente dentro del paquete de estado. Aquí únicamente
  * se guarda lo necesario para dibujar: paleta, animación y suavizado.
  *
- * Los recursos visuales están separados de la lógica:
- *  - Si existe assets/images/pollito-N.png (N = 1..6) se dibuja ese sprite.
- *  - Si no existe, se dibuja el pollito vectorial de respaldo.
- * Añadir sprites NO requiere tocar esta lógica: basta con dejar el archivo
- * en la carpeta (ver assets/images/README.md).
+ * Los dibujos son de RECURSOS (js/recursos.js): cada personaje tiene una
+ * carpeta con un fotograma por estado (quieto, caminar, salto, disparo, danio
+ * y muerto). Si la imagen todavía no ha cargado (o falta el archivo) se dibuja
+ * el pollito vectorial de respaldo, así el juego nunca se queda en blanco.
+ *
+ * Animación: los fotogramas son dibujos fijos, así que el movimiento se
+ * consigue en el momento de pintar (estirado, aplastado, balanceo y retroceso),
+ * igual que en los juegos de dibujos animados.
  *
  * Animaciones soportadas (llegan del servidor): idle, caminar, salto,
  * disparo, danio y muerto.
  */
 
-/** Caché de sprites compartida por todos los personajes. */
-const SPRITES_POLLITOS = new Map();
+/** Alto con el que se dibuja un pollito en la arena (el radio físico es 17). */
+const ALTO_POLLITO = 58;
 
-/**
- * Intenta cargar el sprite de un personaje.
- *
- * @param {number} indicePersonaje Índice del personaje (0..5).
- * @returns {object} { imagen, listo }
- */
-function obtenerSprite(indicePersonaje) {
-    if (SPRITES_POLLITOS.has(indicePersonaje)) {
-        return SPRITES_POLLITOS.get(indicePersonaje);
-    }
+/** Nombre de animación del servidor -> estado de dibujo. */
+const ESTADOS_DE_ANIMACION = {
+    idle: "quieto",
+    quieto: "quieto",
+    caminar: "caminar",
+    correr: "caminar",
+    salto: "salto",
+    saltar: "salto",
+    disparo: "disparo",
+    danio: "danio",
+    dano: "danio",
+    muerto: "muerto"
+};
 
-    const recurso = { imagen: null, listo: false };
-    SPRITES_POLLITOS.set(indicePersonaje, recurso);
-
-    const imagen = new Image();
-    imagen.src = `assets/images/pollito-${indicePersonaje + 1}.png`;
-    imagen.addEventListener("load", () => {
-        recurso.listo = true;
-    });
-    imagen.addEventListener("error", () => {
-        // Sin sprite se usa el dibujo vectorial; no es un error del juego.
-        recurso.listo = false;
-    });
-    recurso.imagen = imagen;
-
-    return recurso;
-}
 
 class PersonajeVista {
     /**
@@ -84,7 +74,41 @@ class PersonajeVista {
         this.tiempoDisparo = 0;
         this.tiempoParpadeo = Math.random() * 3;
         this.tiempoMuerte = 0;
-        this.sprite = obtenerSprite(this.indicePersonaje);
+        this.ficha = Recursos.pollito(this.indicePersonaje);
+    }
+
+    /**
+     * Estado de dibujo que corresponde al momento actual.
+     *
+     * @returns {string} quieto, caminar, salto, disparo, danio o muerto.
+     */
+    estadoDeDibujo() {
+        if (!this.vivo) {
+            return "muerto";
+        }
+
+        if (this.animacion === "disparo" || this.tiempoDisparo > 0.18) {
+            return "disparo";
+        }
+
+        if (this.animacion === "danio" || this.tiempoDanio > 0.25) {
+            return "danio";
+        }
+
+        if (this.animacion === "salto" || !this.enSuelo) {
+            return "salto";
+        }
+
+        return ESTADOS_DE_ANIMACION[this.animacion] || "quieto";
+    }
+
+    /**
+     * Imagen del estado actual (o null si todavía no está cargada).
+     *
+     * @returns {HTMLImageElement|null}
+     */
+    imagenActual() {
+        return Recursos.imagen(Recursos.rutaPollito(this.indicePersonaje, this.estadoDeDibujo()));
     }
 
     /**
@@ -178,14 +202,12 @@ class PersonajeVista {
         this.dibujarSombra(ctx);
 
         if (this.vivo) {
-            if (this.sprite.listo) {
-                this.dibujarSprite(ctx);
-            } else {
+            if (!this.dibujarSprite(ctx)) {
                 this.dibujarVector(ctx);
             }
 
             this.dibujarCanon(ctx);
-        } else {
+        } else if (!this.dibujarCaidoConArte(ctx)) {
             this.dibujarCaido(ctx);
         }
 
@@ -235,23 +257,104 @@ class PersonajeVista {
     }
 
     /**
-     * Dibuja el pollito usando el sprite externo si está disponible.
+     * Dibuja el pollito con su dibujo de verdad y lo anima al pintarlo.
      *
-     * El sprite debe mirar a la derecha; se voltea según la dirección.
+     * Movimiento de dibujos animados:
+     *  - quieto  : respira (sube y baja) y se aplasta un poco al exhalar.
+     *  - caminar : se balancea de lado a lado y da saltitos.
+     *  - salto   : se estira (más alto y más estrecho).
+     *  - disparo : retrocede y se aplasta por el culatazo.
+     *  - daño    : tiembla y se aplasta.
+     *
+     * @param {CanvasRenderingContext2D} ctx Contexto de dibujo.
+     * @returns {boolean} false si el dibujo no está disponible (respaldo vectorial).
      */
     dibujarSprite(ctx) {
-        const tamano = 46;
+        const imagen = this.imagenActual();
+
+        if (!imagen) {
+            return false;
+        }
+
+        const estado = this.estadoDeDibujo();
+        const direccion = this.direccion < 0 ? -1 : 1;
+        const paso = Math.sin(this.fase);
+        const baseY = this.y + 17; // Línea de los pies (coincide con el suelo de la sombra).
+
+        let subida = 0;
+        let giro = 0;
+        let estirado = 1;
+        let desplazamiento = 0;
+
+        if (estado === "caminar") {
+            // Bamboleo y saltito al dar cada paso.
+            giro = paso * 0.06;
+            subida = -Math.abs(paso) * 1.6;
+            estirado = 1 + Math.abs(paso) * 0.02;
+        } else if (estado === "salto") {
+            giro = direccion * 0.05;
+            estirado = 1.07;
+        } else if (estado === "disparo") {
+            // Retroceso: se echa hacia atrás y se aplasta.
+            const retroceso = Math.max(0, this.tiempoDisparo) / 0.3;
+            desplazamiento = -direccion * retroceso * 6;
+            giro = -direccion * retroceso * 0.06;
+            estirado = 1 - retroceso * 0.03;
+        } else if (estado === "danio") {
+            desplazamiento = Math.sin(this.tiempoDanio * 70) * 2.2;
+            estirado = 0.96;
+        } else {
+            // Quieto: respiración suave.
+            subida = paso * 0.9;
+            giro = paso * 0.015;
+            estirado = 1 + paso * 0.012;
+        }
+
+        const anchoBase = ALTO_POLLITO * (imagen.naturalWidth / imagen.naturalHeight);
+        const opacidad = this.tiempoDanio > 0 && Math.sin(this.tiempoDanio * 40) > 0 ? 0.8 : 1;
 
         ctx.save();
-        ctx.globalAlpha = this.tiempoDanio > 0 && Math.sin(this.tiempoDanio * 40) > 0 ? 0.75 : 1;
-        ctx.translate(this.x, this.y - 8);
-        ctx.scale(this.direccion < 0 ? -1 : 1, 1);
-        ctx.drawImage(this.sprite.imagen, -tamano / 2, -tamano / 2, tamano, tamano);
+        ctx.globalAlpha = opacidad;
+        ctx.translate(this.x + desplazamiento, baseY + subida);
+        ctx.rotate(giro);
+        // El estirado conserva el volumen: lo que crece de alto se estrecha.
+        ctx.scale(direccion * (1 / estirado), estirado);
+        ctx.drawImage(imagen, -anchoBase / 2, -ALTO_POLLITO, anchoBase, ALTO_POLLITO);
         ctx.restore();
 
         if (this.tiempoDanio > 0) {
             this.dibujarDestelloDanio(ctx);
         }
+
+        return true;
+    }
+
+    /**
+     * Dibuja el pollito eliminado con su dibujo de "muerto".
+     *
+     * @param {CanvasRenderingContext2D} ctx Contexto de dibujo.
+     * @returns {boolean} false si el dibujo no está disponible.
+     */
+    dibujarCaidoConArte(ctx) {
+        const imagen = Recursos.imagen(Recursos.rutaPollito(this.indicePersonaje, "muerto"));
+
+        if (!imagen) {
+            return false;
+        }
+
+        const alto = ALTO_POLLITO * 0.8;
+        const ancho = alto * (imagen.naturalWidth / imagen.naturalHeight);
+        const opacidad = Math.max(0.45, 0.95 - this.tiempoMuerte * 0.3);
+
+        ctx.save();
+        ctx.globalAlpha = opacidad;
+        ctx.translate(this.x, this.y + 16);
+        ctx.rotate((this.direccion < 0 ? 1 : -1) * 0.16);
+        ctx.scale(this.direccion < 0 ? -1 : 1, 1);
+        ctx.drawImage(imagen, -ancho / 2, -alto, ancho, alto);
+        ctx.restore();
+
+        return true;
     }
 
     /**
@@ -416,6 +519,12 @@ class PersonajeVista {
      *
      * La fórmula es la misma del Cañón original (punta = centro + cos/sin *
      * longitud * dirección), por eso la bala sale exactamente de la boca.
+     *
+     * Estilo: barril grueso de dibujos animados (contorno oscuro, cuerpo
+     * naranja con degradado, anillos dorados y culata redonda). El dibujo de
+     * assets/imagenes/interfaz/armas/canon.png NO se usa aquí: a 34 px de
+     * barril pierde todo el detalle (ver utilidades/prueba_arma.ps1); se usa
+     * como adorno del menú, a tamaño grande.
      */
     dibujarCanon(ctx) {
         const longitud = CONFIG_CLIENTE.LONGITUD_CANON;
@@ -426,35 +535,90 @@ class PersonajeVista {
         const puntaX = baseX + Math.cos(radianes) * longitud * direccion;
         const puntaY = baseY - Math.sin(radianes) * longitud;
 
-        ctx.save();
+        // Perpendicular "hacia arriba" del barril: sirve para el brillo.
+        const perpX = Math.sin(radianes) * direccion;
+        const perpY = -Math.cos(radianes);
+        const brillo = 3.5;
 
-        // Cuerpo del cañón con degradado.
-        const gradiente = ctx.createLinearGradient(baseX, baseY, puntaX, puntaY);
-        gradiente.addColorStop(0, "#3d4a55");
-        gradiente.addColorStop(1, "#1b2229");
-        ctx.strokeStyle = gradiente;
-        ctx.lineWidth = 9;
+        ctx.save();
         ctx.lineCap = "round";
+
+        // 1. Contorno oscuro (el borde de dibujo animado).
+        ctx.strokeStyle = "#2b1408";
+        ctx.lineWidth = 16;
         ctx.beginPath();
         ctx.moveTo(baseX, baseY);
         ctx.lineTo(puntaX, puntaY);
         ctx.stroke();
 
-        // Brillo superior del metal.
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
-        ctx.lineWidth = 2;
+        // 2. Cuerpo del barril con degradado naranja.
+        const gradiente = ctx.createLinearGradient(baseX, baseY, puntaX, puntaY);
+        gradiente.addColorStop(0, "#ffb347");
+        gradiente.addColorStop(1, "#e2571a");
+        ctx.strokeStyle = gradiente;
+        ctx.lineWidth = 12;
         ctx.beginPath();
-        ctx.moveTo(baseX, baseY - 2);
-        ctx.lineTo(puntaX, puntaY - 2);
+        ctx.moveTo(baseX, baseY);
+        ctx.lineTo(puntaX, puntaY);
         ctx.stroke();
 
-        // Boca del cañón.
-        ctx.fillStyle = "#111820";
+        // 3. Reflejo superior del metal.
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(puntaX, puntaY, 5.5, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(baseX + perpX * brillo, baseY + perpY * brillo);
+        ctx.lineTo(puntaX + perpX * brillo, puntaY + perpY * brillo);
+        ctx.stroke();
 
-        // Resplandor de carga: crece con la potencia real del servidor.
+        // 4. Anillos dorados del barril.
+        ctx.strokeStyle = "#ffd166";
+        ctx.lineWidth = 4;
+
+        [0.4, 0.72].forEach((posicion) => {
+            const centroX = baseX + (puntaX - baseX) * posicion;
+            const centroY = baseY + (puntaY - baseY) * posicion;
+
+            ctx.beginPath();
+            ctx.moveTo(centroX - perpX * 8, centroY - perpY * 8);
+            ctx.lineTo(centroX + perpX * 8, centroY + perpY * 8);
+            ctx.stroke();
+        });
+
+        // 5. Culata (la recámara, apoyada en el cuerpo del pollito).
+        ctx.fillStyle = "#3a2010";
+        ctx.beginPath();
+        ctx.arc(baseX, baseY, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ffd166";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // 6. Boca del cañón.
+        ctx.fillStyle = "#241206";
+        ctx.beginPath();
+        ctx.arc(puntaX, puntaY, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#ffd166";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // 7. Fogonazo del disparo.
+        if (this.tiempoDisparo > 0.2) {
+            const fuerza = (this.tiempoDisparo - 0.2) / 0.1;
+
+            ctx.globalAlpha = Math.max(0, Math.min(1, fuerza));
+            ctx.fillStyle = "#fff3c4";
+            ctx.beginPath();
+            ctx.arc(puntaX, puntaY, 5 + fuerza * 9, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "rgba(255, 170, 60, 0.7)";
+            ctx.beginPath();
+            ctx.arc(puntaX, puntaY, 9 + fuerza * 14, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+        }
+
+        // 8. Resplandor de carga: crece con la potencia real del servidor.
         if (this.cargando && this.vivo) {
             const rango = CONFIG_CLIENTE.POTENCIA_MAXIMA - CONFIG_CLIENTE.POTENCIA_MINIMA;
             const proporcion = Math.max(0, Math.min(1, (this.potencia - CONFIG_CLIENTE.POTENCIA_MINIMA) / rango));
@@ -541,37 +705,61 @@ class PersonajeVista {
      * @param {boolean} esTurno Si es el personaje con el turno actual.
      */
     dibujarEtiqueta(ctx, esTurno) {
-        const anchoBarra = 48;
-        const altoBarra = 6;
+        const anchoBarra = 54;
+        const altoBarra = 9;
         const porcentaje = Math.max(0, Math.min(1, this.vidaMostrada / 100));
         const inicioX = this.x - anchoBarra / 2;
-        const barraY = this.y - 48;
-        const colorVida = porcentaje > 0.6 ? "#4ddf7d" : porcentaje > 0.3 ? "#ffd166" : "#ff6b6b";
+        const barraY = this.y - 52;
+        const colorVida = porcentaje > 0.6 ? "#5ce07a" : porcentaje > 0.3 ? "#ffd166" : "#ff6b6b";
         const etiqueta = `${this.esLocal ? "TÚ " : ""}${this.nombre}`;
         const bajas = this.estadisticas.bajas > 0 ? ` ☠${this.estadisticas.bajas}` : "";
+        const texto = `${etiqueta}${bajas}`;
 
         ctx.save();
         ctx.textAlign = "center";
-        ctx.font = "bold 11px 'Trebuchet MS', Verdana, sans-serif";
+        ctx.font = "bold 12px 'Trebuchet MS', Verdana, sans-serif";
 
-        // Nombre con contorno para que se lea sobre cualquier fondo.
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = "rgba(3, 12, 22, 0.85)";
-        ctx.strokeText(`${etiqueta}${bajas}`, this.x, barraY - 6);
+        // Nombre con contorno grueso (estilo dibujo animado).
+        ctx.lineWidth = 4;
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "rgba(11, 26, 43, 0.92)";
+        ctx.strokeText(texto, this.x, barraY - 7);
 
-        ctx.fillStyle = this.vivo ? (esTurno ? "#ffd166" : "#eaf6ff") : "#9fb3c4";
-        ctx.fillText(`${etiqueta}${bajas}`, this.x, barraY - 6);
+        ctx.fillStyle = !this.vivo ? "#9fb3c4" : esTurno ? "#ffd166" : "#ffffff";
+        ctx.fillText(texto, this.x, barraY - 7);
 
-        // Barra de vida.
-        ctx.fillStyle = "rgba(3, 12, 22, 0.85)";
-        ctx.fillRect(inicioX - 1, barraY - 1, anchoBarra + 2, altoBarra + 2);
-        ctx.fillStyle = this.vivo ? colorVida : "#54606b";
-        ctx.fillRect(inicioX, barraY, anchoBarra * porcentaje, altoBarra);
+        // Barra de vida redondeada con borde oscuro y brillo.
+        ctx.beginPath();
+        ctx.roundRect(inicioX, barraY - 2, anchoBarra, altoBarra, altoBarra / 2);
+        ctx.fillStyle = "rgba(11, 26, 43, 0.9)";
+        ctx.fill();
+
+        if (porcentaje > 0.02) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(inicioX + 1.5, barraY - 0.5, (anchoBarra - 3) * porcentaje, altoBarra - 3, altoBarra / 2);
+            ctx.clip();
+            ctx.fillStyle = this.vivo ? colorVida : "#54606b";
+            ctx.fillRect(inicioX, barraY - 2, anchoBarra, altoBarra);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+            ctx.fillRect(inicioX, barraY - 1.5, anchoBarra, 2.5);
+            ctx.restore();
+        }
+
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(11, 26, 43, 0.95)";
+        ctx.beginPath();
+        ctx.roundRect(inicioX, barraY - 2, anchoBarra, altoBarra, altoBarra / 2);
+        ctx.stroke();
 
         // Valor de vida.
-        ctx.font = "bold 9px 'Trebuchet MS', Verdana, sans-serif";
-        ctx.fillStyle = this.vivo ? "#ffffff" : "#ffb0b0";
-        ctx.fillText(this.vivo ? String(Math.round(this.vidaMostrada)) : "ELIMINADO", this.x, barraY + 6);
+        ctx.font = "bold 10px 'Trebuchet MS', Verdana, sans-serif";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(11, 26, 43, 0.9)";
+        const valor = this.vivo ? String(Math.round(this.vidaMostrada)) : "FUERA";
+        ctx.strokeText(valor, this.x, barraY + 8);
+        ctx.fillStyle = this.vivo ? "#eaf6ff" : "#ffb0b0";
+        ctx.fillText(valor, this.x, barraY + 8);
 
         ctx.restore();
     }
