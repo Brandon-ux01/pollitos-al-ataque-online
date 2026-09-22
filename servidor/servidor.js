@@ -27,7 +27,7 @@ const CONFIG = require("./config");
 const Sala = require("./sala");
 const { listarArchivosDeAudio } = require("./sonidos");
 
-const PUERTO = Number(process.env.PORT) || 3001;
+const PUERTO = Number(process.env.PORT) || 3210;
 const ORIGENES = process.env.ORIGENES_PERMITIDOS || "*";
 const RAIZ_CLIENTE = path.join(__dirname, "..");
 const CARPETA_SONIDOS = path.join(RAIZ_CLIENTE, "assets", "sonidos");
@@ -115,6 +115,53 @@ function salaDeSocket(socket) {
 }
 
 /* ---------------------------------------------------------
+   Chat de sala
+   --------------------------------------------------------- */
+
+/**
+ * Color de identificación de un jugador en el chat.
+ *
+ * Depende del ESPACIO que ocupa en la sala (0..5), así que todos los
+ * jugadores de la partida ven el mismo color para el mismo jugador. La tabla
+ * de colores vive en servidor/config.js (única fuente de verdad).
+ *
+ * @param {number} indice Espacio del jugador en la sala.
+ * @returns {{ nombre: string, color: string }} Rótulo y color CSS.
+ */
+function colorDeJugador(indice) {
+    return CONFIG.COLORES_JUGADOR[Number(indice)] || CONFIG.COLORES_JUGADOR[0];
+}
+
+/**
+ * Limpia y valida el texto de un mensaje de chat.
+ *
+ * El chat NUNCA se fía de lo que manda el cliente:
+ *  - solo acepta cadenas de texto (cualquier otra cosa se descarta),
+ *  - cambia los caracteres de control por espacios (un chat de una sola línea
+ *    no debe recibir saltos de línea ni tabuladores),
+ *  - quita los espacios sobrantes del principio y del final,
+ *  - recorta al máximo configurado (CONFIG.CHAT_LONGITUD_MAXIMA),
+ *  - devuelve "" si no queda nada (mensaje vacío o solo con espacios).
+ *
+ * El texto se retransmite TAL CUAL, sin interpretarlo: el cliente lo pinta
+ * como texto plano (textContent), así que un mensaje con
+ * <script>alert("hola")</script> se lee literalmente y no se ejecuta.
+ *
+ * @param {*} valor Texto recibido del cliente.
+ * @returns {string} Texto listo para retransmitir, o "" si no es válido.
+ */
+function limpiarMensajeDeChat(valor) {
+    if (typeof valor !== "string") {
+        return "";
+    }
+
+    return valor
+        .replace(/[\u0000-\u001f\u007f]/g, " ")
+        .trim()
+        .slice(0, CONFIG.CHAT_LONGITUD_MAXIMA);
+}
+
+/* ---------------------------------------------------------
    API HTTP (diagnóstico, despliegue y sonidos)
    --------------------------------------------------------- */
 
@@ -163,7 +210,16 @@ app.get("/api/sonidos", (request, response) => {
    --------------------------------------------------------- */
 
 io.on("connection", (socket) => {
-    socket.emit("conexion:identidad", { id: socket.id });
+    // Identidad del socket + configuración del chat. El límite de caracteres
+    // viaja desde aquí para que el cliente no tenga una copia propia del
+    // número que vive en servidor/config.js.
+    socket.emit("conexion:identidad", {
+        id: socket.id,
+        chat: {
+            longitudMaxima: CONFIG.CHAT_LONGITUD_MAXIMA,
+            mensajesPorSegundo: CONFIG.CHAT_MENSAJES_POR_SEGUNDO
+        }
+    });
     console.log(`[red] cliente conectado ${socket.id}`);
 
     // Límite sencillo de acciones por segundo para no saturar la simulación.
@@ -301,6 +357,93 @@ io.on("connection", (socket) => {
         salaDeSocket(socket)?.accion(socket.id, "disparar");
     });
 
+    /* -----------------------------------------------------
+       CHAT DE SALA
+       -----------------------------------------------------
+       El chat usa la MISMA conexión Socket.IO de la partida (no hay
+       socket, puerto ni servidor aparte) y el servidor retransmite cada
+       mensaje SOLO a los jugadores de la sala del emisor: nadie de otra
+       sala lo recibe.
+
+       El chat no toca nada del juego: no cambia posiciones, vida, turnos,
+       disparos ni temporizador. Es solo texto.
+       ----------------------------------------------------- */
+
+    // Límite de mensajes por segundo de ESTE jugador (evita el spam).
+    let mensajesEnVentana = 0;
+    let inicioVentanaChat = Date.now();
+
+    /**
+     * Comprueba si este jugador todavía puede enviar un mensaje ahora mismo.
+     *
+     * @returns {boolean}
+     */
+    function puedeEnviarMensaje() {
+        const ahora = Date.now();
+
+        if (ahora - inicioVentanaChat > 1000) {
+            inicioVentanaChat = ahora;
+            mensajesEnVentana = 0;
+        }
+
+        mensajesEnVentana += 1;
+        return mensajesEnVentana <= CONFIG.CHAT_MENSAJES_POR_SEGUNDO;
+    }
+
+    /**
+     * Mensaje de chat de un jugador para su propia sala.
+     *
+     * El cliente solo manda el TEXTO: el nombre, el personaje y el color los
+     * pone el servidor a partir del jugador de la sala, así que nadie puede
+     * hacerse pasar por otro ni inventarse colores.
+     */
+    socket.on("chat:enviar", (datos, responder) => {
+        const sala = salaDeSocket(socket);
+        const jugador = sala ? sala.jugadores.get(socket.id) : null;
+
+        // 1. Solo puede escribir quien está en una sala.
+        if (!sala || !jugador) {
+            responder?.({ ok: false, mensaje: "No estás en ninguna sala." });
+            return;
+        }
+
+        // 2. Texto limpio y no vacío (recortado al máximo permitido).
+        const texto = limpiarMensajeDeChat(datos && datos.texto);
+
+        if (!texto) {
+            responder?.({ ok: false, mensaje: "El mensaje está vacío." });
+            return;
+        }
+
+        // 3. Ritmo máximo por jugador.
+        if (!puedeEnviarMensaje()) {
+            responder?.({ ok: false, mensaje: "Vas demasiado rápido: espera un instante." });
+            return;
+        }
+
+        const color = colorDeJugador(jugador.indice);
+        const personaje = CONFIG.PERSONAJES[jugador.personaje] || CONFIG.PERSONAJES[0];
+
+        const paquete = {
+            tipo: "mensaje",
+            autorId: socket.id,
+            nombre: jugador.nombre,
+            personaje: jugador.personaje,
+            personajeNombre: personaje.nombre,
+            color: color.color,
+            colorNombre: color.nombre,
+            texto,
+            hora: Date.now()
+        };
+
+        // 4. SOLO a los jugadores de esta sala (io.to es la sala de Socket.IO).
+        io.to(sala.codigo).emit("chat:mensaje", paquete);
+
+        sala.ultimaActividad = Date.now();
+        console.log(`[sala ${sala.codigo}] chat [${color.nombre}] ${jugador.nombre}: ${texto}`);
+        responder?.({ ok: true, color: color.color, colorNombre: color.nombre });
+    });
+
     /** Desconexión: se informa a la sala y la partida continúa sin él. */
     socket.on("disconnect", (motivo) => {
         const sala = salaDeSocket(socket);
@@ -350,6 +493,10 @@ function entrarEnSala(socket, sala, nombre) {
     sala.ultimaActividad = Date.now();
     console.log(`[sala ${sala.codigo}] ${resultado.jugador.nombre} entró (${sala.cantidadJugadores}/${CONFIG.MAX_JUGADORES})`);
 
+    // El color del jugador viaja con la respuesta para que el cliente pueda
+    // mostrar de quién es cada mensaje del chat desde el primer momento.
+    const color = colorDeJugador(resultado.jugador.indice);
+
     return {
         ok: true,
         codigo: sala.codigo,
@@ -359,7 +506,9 @@ function entrarEnSala(socket, sala, nombre) {
             id: socket.id,
             nombre: resultado.jugador.nombre,
             personaje: resultado.jugador.personaje,
-            indice: resultado.jugador.indice
+            indice: resultado.jugador.indice,
+            color: color.color,
+            colorNombre: color.nombre
         }
     };
 }

@@ -27,6 +27,12 @@
  *    esperar el turno completo en cada jugada haría la partida lenta.
  *  - La partida termina cuando queda un único superviviente (antes eran dos
  *    equipos; ahora son seis jugadores en batalla libre).
+ *  - DOBLE SALTO de los pollos: cada jugador puede dar DOS saltos antes de
+ *    volver a tocar una superficie (ESPACIO en el suelo y ESPACIO otra vez en
+ *    el aire). Los dos saltos usan la MISMA fuerza (CONFIG.FUERZA_SALTO) y el
+ *    límite está en CONFIG.SALTOS_MAXIMOS. El contador se reinicia al
+ *    aterrizar sobre cualquier superficie válida y solo afecta a los pollos
+ *    (jugadores): ningún otro personaje usa esta mecánica.
  */
 
 const CONFIG = require("./config");
@@ -98,6 +104,15 @@ class Partida {
                 potencia: CONFIG.POTENCIA_MINIMA,
                 cargando: false,
                 enSuelo: false,
+                /**
+                 * Tipo de personaje. Los jugadores son POLLOS y son los únicos
+                 * que pueden dar el doble salto (ver saltosMaximosDe()).
+                 */
+                tipo: "pollo",
+                /** Saltos gastados desde el último aterrizaje (doble salto). */
+                saltosRealizados: 0,
+                /** Estado anterior de ESPACIO: se salta al PULSAR, no al mantener. */
+                saltoMantenido: false,
                 movimiento: 0,
                 disparoRealizado: false,
                 animacion: "idle",
@@ -197,6 +212,7 @@ class Partida {
             jugador.vx = 0;
             jugador.vy = 0;
             jugador.enSuelo = false;
+            jugador.saltosRealizados = 0;
             jugador.direccion = posicion.x < CONFIG.ANCHO / 2 ? 1 : -1;
         });
     }
@@ -228,6 +244,9 @@ class Partida {
             jugador.cargando = false;
             jugador.movimiento = 0;
             jugador.disparoRealizado = false;
+            // El doble salto arranca limpio en cada partida (y en cada revancha).
+            jugador.saltosRealizados = 0;
+            jugador.saltoMantenido = false;
             jugador.animacion = "idle";
             jugador.tiempoAnimacion = 0;
             jugador.estadisticas.disparos = 0;
@@ -376,8 +395,21 @@ class Partida {
             }
         }
 
-        if (datos.saltar === true) {
-            this.saltar(jugador);
+        if (typeof datos.saltar === "boolean") {
+            /**
+             * ESPACIO se aplica al PULSAR, no al mantener.
+             *
+             * El cliente manda el estado de la tecla (pulsada o no) en cada
+             * entrada, así que aquí se compara con el estado anterior: mantener
+             * la tecla no gasta el segundo salto ni repite saltos al aterrizar.
+             */
+            const pulsacion = datos.saltar && !jugador.saltoMantenido;
+
+            jugador.saltoMantenido = datos.saltar;
+
+            if (pulsacion) {
+                this.saltar(jugador);
+            }
         }
 
         if (Number.isFinite(datos.angulo)) {
@@ -388,17 +420,45 @@ class Partida {
     }
 
     /**
-     * Hace saltar a un jugador si está apoyado en el suelo.
+     * Saltos que puede dar un personaje antes de volver a tocar una superficie.
+     *
+     * Solo los POLLOS (los jugadores) tienen el doble salto: cualquier otro tipo
+     * de personaje (gusanos, enemigos...) se queda con un único salto, así que
+     * esta mecánica nunca se aplica "de rebote" a otros personajes.
+     *
+     * @param {object} jugador Estado del jugador.
+     * @returns {number}
+     */
+    saltosMaximosDe(jugador) {
+        return jugador.tipo === "pollo" ? CONFIG.SALTOS_MAXIMOS : 1;
+    }
+
+    /**
+     * Hace saltar a un pollo (doble salto incluido).
+     *
+     * Reglas:
+     *  - En el suelo el contador vale 0: ESPACIO hace el PRIMER salto.
+     *  - En el aire con un salto gastado: ESPACIO hace el SEGUNDO salto.
+     *  - Con los dos gastados: ESPACIO no hace nada (no hay tercer salto).
+     *  - Al aterrizar sobre una superficie válida el contador vuelve a 0: se
+     *    reinicia en aplicarGravedad (aterrizaje) y en los escalones de
+     *    moverHorizontal, que son las DOS únicas formas de tocar suelo del
+     *    juego. Nada de comparar con "y === posición inicial": funciona igual
+     *    sobre terreno, plataformas y bloques de cualquier altura.
+     *
+     * Los dos saltos usan la misma fuerza (CONFIG.FUERZA_SALTO) y la misma
+     * animación ("salto"), así que el cliente no necesita nada nuevo.
      *
      * @param {object} jugador Estado del jugador.
      */
     saltar(jugador) {
-        if (!jugador.enSuelo) {
+        if (jugador.saltosRealizados >= this.saltosMaximosDe(jugador)) {
             return;
         }
 
         jugador.vy = -CONFIG.FUERZA_SALTO;
         jugador.enSuelo = false;
+        jugador.saltosRealizados += 1;
         jugador.animacion = "salto";
         this.registrarEvento({ tipo: "salto", jugadorId: jugador.id });
     }
@@ -626,6 +686,8 @@ class Partida {
                 jugador.y = cima - radio;
                 jugador.vy = 0;
                 jugador.enSuelo = true;
+                // Toca suelo (escalón): recupera el doble salto.
+                jugador.saltosRealizados = 0;
                 recorrido += avance;
                 continue;
             }
@@ -659,6 +721,9 @@ class Partida {
                 jugador.y = superficie - radio;
                 jugador.vy = 0;
                 jugador.enSuelo = true;
+                // Aterrizó en una superficie válida (terreno, plataforma o
+                // bloque, a cualquier altura): recupera el doble salto.
+                jugador.saltosRealizados = 0;
                 return;
             }
         }

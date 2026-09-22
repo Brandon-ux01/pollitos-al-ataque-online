@@ -3,8 +3,9 @@
  *
  * Ejecuta el mismo código que usa el servidor (servidor/partida.js y
  * servidor/terreno.js) sin red, para comprobar que las mecánicas heredadas
- * siguen funcionando: colocación, física, turnos, disparo, daño, muerte,
- * terreno destruible, desconexión y final de partida.
+ * siguen funcionando: colocación, física (incluido el DOBLE SALTO de los
+ * pollos), turnos, disparo, daño, muerte, terreno destruible, desconexión y
+ * final de partida.
  *
  * Uso:
  *   npm run motor
@@ -51,6 +52,43 @@ function resolverProyectiles(partida, segundosMaximos = 12) {
     }
 
     return transcurrido;
+}
+
+/**
+ * Coloca a un jugador en una posición concreta y simula hasta que quede
+ * apoyado sobre una superficie (usa la DETECCIÓN DE SUELO real del juego).
+ *
+ * @param {Partida} partida Partida de la prueba.
+ * @param {string} id Identificador del jugador.
+ * @param {number} x Posición horizontal de partida.
+ * @param {number} y Posición vertical de partida.
+ * @returns {object} Estado del jugador.
+ */
+function apoyarJugador(partida, id, x, y) {
+    const jugador = partida.jugadores.get(id);
+
+    jugador.x = x;
+    jugador.y = y;
+    jugador.vx = 0;
+    jugador.vy = 0;
+    jugador.enSuelo = false;
+    jugador.saltosRealizados = 0;
+    jugador.saltoMantenido = false;
+
+    for (let paso = 0; paso < 300; paso++) {
+        partida.actualizar(CONFIG.PASO_SIMULACION);
+
+        if (jugador.enSuelo && jugador.vy === 0) {
+            return jugador;
+        }
+    }
+
+    return jugador;
+}
+
+/** Y de los pies del jugador (para ver sobre qué superficie está). */
+function piesDe(jugador) {
+    return jugador.y + CONFIG.RADIO_PERSONAJE;
 }
 
 console.log("\n== TERRENO DESTRUIBLE ==");
@@ -163,10 +201,184 @@ console.log("\n== FÍSICA, MOVIMIENTO Y SALTO ==");
     comprobar(jugador.vx === 0, "no se arrastra movimiento entre turnos");
 }
 
+console.log("\n== DOBLE SALTO (POLLOS) ==");
+{
+    const partida = new Partida(jugadoresSala(2));
+
+    // El otro jugador se aparta para no estorbar la física.
+    partida.jugadores.get("s1").x = 1100;
+    partida.jugadores.get("s1").y = 100;
+
+    /** El cronómetro es cosa de otra prueba: aquí se deja el turno lleno. */
+    const sinCronometro = () => {
+        partida.tiempoTurno = CONFIG.DURACION_TURNO;
+    };
+
+    // PRUEBA 1: en el suelo, ESPACIO hace el primer salto.
+    const jugador = apoyarJugador(partida, "s0", 60, 400);
+
+    comprobar(jugador.enSuelo && jugador.saltosRealizados === 0,
+        "PRUEBA 1: el pollo está apoyado en el suelo (0 saltos gastados)");
+
+    sinCronometro();
+    partida.entrada("s0", { saltar: true });
+
+    comprobar(jugador.vy === -CONFIG.FUERZA_SALTO && jugador.saltosRealizados === 1,
+        `PRUEBA 1: ESPACIO da el primer salto con la fuerza de siempre (${CONFIG.FUERZA_SALTO} px/s)`);
+
+    partida.actualizar(CONFIG.PASO_SIMULACION);
+
+    comprobar(!jugador.enSuelo && jugador.vy < 0, "PRUEBA 1: el pollo está en el aire, subiendo");
+
+    // PRUEBA 2: en el aire, ESPACIO otra vez hace el segundo salto.
+    const vyAntes = jugador.vy;
+
+    partida.entrada("s0", { saltar: false });
+    partida.entrada("s0", { saltar: true });
+
+    comprobar(jugador.vy === -CONFIG.FUERZA_SALTO && jugador.saltosRealizados === 2,
+        "PRUEBA 2: ESPACIO en el aire da el SEGUNDO salto (misma fuerza)");
+    comprobar(jugador.vy < vyAntes, "PRUEBA 2: el segundo salto vuelve a impulsarlo hacia arriba");
+
+    // PRUEBA 3: un tercer ESPACIO no hace nada.
+    const saltosRegistrados = partida.eventos.filter((evento) => evento.tipo === "salto").length;
+
+    partida.entrada("s0", { saltar: false });
+    partida.entrada("s0", { saltar: true });
+
+    comprobar(jugador.saltosRealizados === 2 &&
+        partida.eventos.filter((evento) => evento.tipo === "salto").length === saltosRegistrados,
+        "PRUEBA 3: con los dos saltos gastados ESPACIO no hace nada (no hay tercer salto)");
+
+    // PRUEBA 4: al aterrizar se recuperan los dos saltos.
+    let pasos = 0;
+
+    while (!jugador.enSuelo && pasos < 600) {
+        partida.actualizar(CONFIG.PASO_SIMULACION);
+        pasos += 1;
+    }
+
+    comprobar(jugador.enSuelo && jugador.saltosRealizados === 0,
+        `PRUEBA 4: al tocar el suelo el contador vuelve a 0 (aterrizó con los pies en y=${Math.round(piesDe(jugador))})`);
+
+    sinCronometro();
+    partida.entrada("s0", { saltar: false });
+    partida.entrada("s0", { saltar: true });
+
+    comprobar(jugador.saltosRealizados === 1 && jugador.vy === -CONFIG.FUERZA_SALTO,
+        "PRUEBA 4: puede volver a dar el primer salto");
+
+    partida.entrada("s0", { saltar: false });
+    partida.entrada("s0", { saltar: true });
+
+    comprobar(jugador.saltosRealizados === 2, "PRUEBA 4: y también el segundo (dos saltos por ciclo)");
+}
+
+console.log("\n== DOBLE SALTO: PLATAFORMAS, PULSACIÓN Y RESTRICCIÓN ==");
+{
+    // PRUEBA 5: el doble salto funciona igual desde una plataforma alta.
+    const partida = new Partida(jugadoresSala(2));
+
+    partida.jugadores.get("s1").x = 1100;
+    partida.jugadores.get("s1").y = 100;
+
+    const plataformaAlta = CONFIG.PLATAFORMAS.reduce((masAlta, plataforma) => {
+        return plataforma.y < masAlta.y ? plataforma : masAlta;
+    });
+
+    const saltador = apoyarJugador(
+        partida,
+        "s0",
+        plataformaAlta.x + plataformaAlta.ancho / 2,
+        plataformaAlta.y - 60
+    );
+
+    comprobar(saltador.enSuelo && Math.abs(piesDe(saltador) - plataformaAlta.y) < 0.01,
+        `PRUEBA 5: el pollo queda apoyado en la plataforma alta (y=${plataformaAlta.y})`);
+
+    partida.tiempoTurno = CONFIG.DURACION_TURNO;
+    partida.entrada("s0", { saltar: true });
+
+    const fuerzaDelPrimero = saltador.vy;
+
+    partida.entrada("s0", { saltar: false });
+    partida.entrada("s0", { saltar: true });
+
+    comprobar(fuerzaDelPrimero === -CONFIG.FUERZA_SALTO && saltador.saltosRealizados === 2,
+        "PRUEBA 5: desde la plataforma alta también hay dos saltos");
+
+    // PRUEBA 6: después del doble salto aterriza en OTRA superficie (otra
+    // altura) y el juego detecta el aterrizaje con su sistema de suelo.
+    partida.entrada("s0", { saltar: false });
+    partida.entrada("s0", { direccion: -1 });
+
+    let pasos = 0;
+
+    while (!saltador.enSuelo && pasos < 900) {
+        partida.actualizar(CONFIG.PASO_SIMULACION);
+        pasos += 1;
+    }
+
+    const superficie = piesDe(saltador);
+    const esSuperficieValida = CONFIG.PLATAFORMAS.some((plataforma) => Math.abs(plataforma.y - superficie) < 0.01);
+
+    comprobar(saltador.enSuelo && esSuperficieValida,
+        `PRUEBA 6: el doble salto aterriza sobre una superficie válida (y=${Math.round(superficie)}, distinta de ${plataformaAlta.y})`);
+    comprobar(saltador.saltosRealizados === 0, "PRUEBA 6: el aterrizaje se detecta y el pollo recupera sus dos saltos");
+
+    // Regla del PULSAR: mantener ESPACIO pulsado no gasta el segundo salto.
+    const mantener = new Partida(jugadoresSala(2));
+
+    mantener.jugadores.get("s1").x = 1100;
+    mantener.jugadores.get("s1").y = 100;
+
+    const pulsado = apoyarJugador(mantener, "s0", 60, 400);
+
+    mantener.tiempoTurno = CONFIG.DURACION_TURNO;
+
+    for (let vez = 0; vez < 5; vez++) {
+        mantener.entrada("s0", { saltar: true });
+    }
+
+    comprobar(pulsado.saltosRealizados === 1 && pulsado.vy === -CONFIG.FUERZA_SALTO,
+        "mantener ESPACIO pulsado no gasta el segundo salto (se salta al PULSAR)");
+
+    mantener.entrada("s0", { saltar: false });
+    mantener.entrada("s0", { saltar: true });
+
+    comprobar(pulsado.saltosRealizados === 2, "soltar y volver a pulsar sí da el segundo salto");
+
+    // Restricción por personaje: solo los POLLOS tienen doble salto.
+    const otros = new Partida(jugadoresSala(2));
+    const gusano = otros.jugadores.get("s1");
+    const pollo = otros.jugadores.get("s0");
+
+    gusano.tipo = "gusano";
+    gusano.enSuelo = true;
+    gusano.saltosRealizados = 0;
+
+    otros.saltar(gusano);
+    otros.saltar(gusano);
+
+    comprobar(gusano.saltosRealizados === 1,
+        "un personaje que NO es pollo (gusano, enemigo...) no recibe el doble salto");
+    comprobar(pollo.tipo === "pollo" && otros.saltosMaximosDe(pollo) === CONFIG.SALTOS_MAXIMOS,
+        `los jugadores son POLLOS y su límite es de ${CONFIG.SALTOS_MAXIMOS} saltos`);
+}
+
 console.log("\n== DISPARO, EXPLOSIÓN Y CRÁTER ==");
 {
     const partida = new Partida(jugadoresSala(2));
     const atacante = partida.jugadores.get("s0");
+
+    // Posiciones y dirección fijas: así el proyectil sale siempre hacia la
+    // derecha y cae sobre el terreno, y esta prueba no depende del azar de la
+    // colocación inicial (antes podía disparar hacia el borde y salir del mapa).
+    atacante.x = 60;
+    atacante.y = 400;
+    atacante.direccion = 1;
+    partida.jugadores.get("s1").x = 1100;
+    partida.jugadores.get("s1").y = 100;
 
     atacante.angulo = 45;
     atacante.potencia = CONFIG.POTENCIA_MAXIMA;

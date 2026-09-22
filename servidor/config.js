@@ -35,6 +35,45 @@ const CONFIG = {
     MAX_SALAS: 250,
     SEGUNDOS_SALA_VACIA: 20,
 
+    // --- Chat de sala -----------------------------------------------------
+    /**
+     * Longitud máxima de un mensaje de chat, en caracteres.
+     *
+     * El servidor recorta aquí cualquier mensaje que llegue más largo (nunca
+     * se fía de lo que envía el cliente) y publica el número en la
+     * configuración de chat que recibe cada jugador al conectarse
+     * (ver servidor/servidor.js -> "conexion:identidad"), así que el campo de
+     * texto del cliente usa EXACTAMENTE este límite y no una copia propia.
+     */
+    CHAT_LONGITUD_MAXIMA: 100,
+
+    /**
+     * Mensajes que puede enviar un mismo jugador por segundo.
+     *
+     * Frena el spam sin estorbar en una conversación normal: al superarlo, el
+     * servidor descarta el mensaje y responde con un aviso.
+     */
+    CHAT_MENSAJES_POR_SEGUNDO: 4,
+
+    /**
+     * Color de identificación de cada jugador en el chat (los seis colores de
+     * una sala completa).
+     *
+     * Se asigna por ESPACIO en la sala (jugador.indice 0..5): el primer
+     * jugador es ROJO, el segundo AZUL y así hasta MORADO. El servidor pone el
+     * color en cada mensaje (nunca el cliente), así que todos los equipos ven
+     * el mismo color para el mismo jugador y aquí está la ÚNICA tabla de
+     * colores del chat.
+     */
+    COLORES_JUGADOR: [
+        { nombre: "ROJO", color: "#ff5c5c" },
+        { nombre: "AZUL", color: "#5ec8ff" },
+        { nombre: "VERDE", color: "#6ee06a" },
+        { nombre: "AMARILLO", color: "#ffd166" },
+        { nombre: "NARANJA", color: "#ff9f1c" },
+        { nombre: "MORADO", color: "#c3a6ff" }
+    ],
+
     // --- Tiempos ----------------------------------------------------------
     PASO_SIMULACION: 1 / 30, // segundos por paso autoritativo
     FRECUENCIA_ESTADO: 50, // milisegundos entre paquetes de estado
@@ -55,7 +94,31 @@ const CONFIG = {
     RADIO_PERSONAJE: 17,
     VIDA_MAXIMA: 100,
     VELOCIDAD_CAMINAR: 140,
+
+    /**
+     * Fuerza del salto (px/s).
+     *
+     * La usan LOS DOS saltos del pollo: el segundo salto no tiene una fuerza
+     * propia, es exactamente la misma (ver SALTOS_MAXIMOS).
+     */
     FUERZA_SALTO: 300,
+
+    /**
+     * Saltos que puede dar un POLLO antes de volver a tocar una superficie.
+     *
+     * 2 = doble salto: ESPACIO en el suelo y ESPACIO otra vez en el aire. El
+     * contador se reinicia al aterrizar sobre cualquier superficie válida
+     * (terreno, plataformas o escalones de distintas alturas).
+     *
+     * Es un número de partida, así que vive aquí (única fuente de verdad): lo
+     * aplica el motor autoritativo (servidor/partida.js) y, al saltar, el
+     * resultado viaja a todos los clientes con el paquete de estado de siempre.
+     *
+     * Solo los POLLOS (los jugadores) usan este límite: cualquier otro tipo de
+     * personaje que se añada en el futuro se queda con un único salto.
+     */
+    SALTOS_MAXIMOS: 2,
+
     GRAVEDAD: 900,
     ALTURA_ESCALON: 25, // escalón máximo que se sube caminando (grosor de plataforma original)
     NIVEL_AGUA: 560, // por debajo de esta altura el pollito se ahoga

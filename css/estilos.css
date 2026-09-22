@@ -1835,3 +1835,188 @@ input:not([type="checkbox"]):not([type="range"]):focus {
         height: clamp(18px, 2.6vh, 28px);
     }
 }
+
+
+/* =========================================================
+   11. CHAT FLOTANTE DE COMBATE (pantalla de batalla)
+   =========================================================
+   Mensajes tipo cápsula que aparecen SOBRE el juego, en la parte superior
+   izquierda y JUSTO DEBAJO del HUD "TURNO DE" (la posición exacta la calcula
+   js/chat.js con el tamaño real del lienzo).
+
+   Reglas que cumple:
+    - NO hay panel ni caja alrededor de los mensajes: cada burbuja es un
+      elemento independiente con su propio fondo redondeado.
+    - Los mensajes no son clicables (pointer-events: none), así que el juego se
+      sigue controlando igual por debajo.
+    - Sin scroll: la capa es absoluta, con ancho máximo y sin desbordamiento,
+      así que nunca aparecen barras de desplazamiento.
+   --------------------------------------------------------- */
+
+.chat-flotante {
+    position: absolute;
+    left: 22px;
+    top: 126px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    /* El ancho real lo ajusta js/chat.js al tamaño del lienzo. */
+    max-width: min(52vw, 460px);
+    /* Los mensajes informan pero no estorban: el clic llega al juego. */
+    pointer-events: none;
+}
+
+.chat-mensajes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Cada mensaje: cápsula oscura semitransparente, sin panel contenedor. */
+.chat-burbuja {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 5px;
+    padding: 5px 11px 5px 9px;
+    border: 1px solid rgba(98, 230, 255, 0.18);
+    border-left: 4px solid #62e6ff; /* el color del jugador (js/chat.js) */
+    border-radius: 11px;
+    background: rgba(4, 14, 26, 0.74);
+    color: #eaf6ff;
+    font-size: 12px;
+    line-height: 1.3;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+    animation: chat-entrar 0.28s ease-out;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Mensajes propios: un toque más claros para reconocerlos de un vistazo. */
+.chat-burbuja.propia {
+    background: rgba(12, 40, 62, 0.8);
+}
+
+/* Aviso del propio chat (por ejemplo "Pulsa ENTER o T"). */
+.chat-burbuja.sistema {
+    border-left-color: rgba(159, 196, 222, 0.7);
+    background: rgba(6, 20, 34, 0.8);
+    font-style: italic;
+    color: #cfe6f5;
+}
+
+/* Salida suave: el mismo movimiento que la entrada, al contrario. */
+.chat-burbuja.saliendo {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+.chat-punto {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #62e6ff;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+}
+
+.chat-etiqueta {
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.chat-nombre {
+    font-weight: bold;
+    white-space: nowrap;
+    color: #ffffff;
+}
+
+.chat-texto {
+    color: #f2f8ff;
+    overflow-wrap: anywhere;
+}
+
+@keyframes chat-entrar {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Campo de escritura: SOLO mientras el jugador escribe (se abre con ENTER o T
+   y se oculta al enviar o al pulsar ESCAPE). Nunca está siempre visible. */
+.chat-entrada {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 4px 3px 11px;
+    border: 1px solid rgba(98, 230, 255, 0.45);
+    border-radius: 999px;
+    background: rgba(4, 14, 26, 0.92);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    animation: chat-entrar 0.18s ease-out;
+    pointer-events: auto;
+}
+
+.chat-entrada[hidden] {
+    display: none !important;
+}
+
+.chat-aviso {
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 1.4px;
+    color: #9fe6ff;
+}
+
+.chat-campo {
+    width: min(226px, 40vw);
+    padding: 5px 0;
+    border: 0;
+    background: transparent;
+    color: #eaf6ff;
+    font: inherit;
+    font-size: 12px;
+}
+
+.chat-campo:focus {
+    outline: none;
+}
+
+.chat-campo::placeholder {
+    color: #7fa5bd;
+}
+
+/* Pantallas pequeñas: burbujas algo más estrechas y letra menor. */
+@media (max-width: 720px) {
+    .chat-flotante {
+        max-width: min(74vw, 340px);
+    }
+
+    .chat-burbuja {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+
+    .chat-campo {
+        width: min(150px, 34vw);
+    }
+}
+
+/* Ventanas bajas: el chat ocupa aún menos, sin llegar nunca a la mitad. */
+@media (max-height: 620px) {
+    .chat-flotante {
+        max-width: min(60vw, 380px);
+    }
+
+    .chat-burbuja {
+        padding: 3px 8px;
+        font-size: 11px;
+    }
+}
+

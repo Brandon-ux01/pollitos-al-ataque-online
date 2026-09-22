@@ -15,6 +15,7 @@
     "arte": "node utilidades/verificar_arte.js",
     "dibujo": "node utilidades/prueba_dibujo.js",
     "salas": "node utilidades/probar_salas.js",
+    "chat": "node utilidades/probar_chat.js",
     "motor": "node utilidades/probar_motor.js"
   },
   "repository": {

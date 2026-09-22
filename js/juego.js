@@ -63,6 +63,19 @@ class Juego {
         this.alTerminar = null;
         this.claves = new Set();
 
+        /**
+         * Doble salto (ESPACIO): pulsación pendiente de enviar y marca de si el
+         * último paquete ya mandó una pulsación.
+         *
+         * Se apunta la PULSACIÓN (no el mantener la tecla) y se garantiza que
+         * nunca salen dos "pulsado" seguidos sin un "suelto" en medio: así el
+         * servidor recibe siempre un borde limpio y ninguna pulsación se pierde,
+         * aunque sea muy corta o caiga entre dos paquetes. Quién decide si toca
+         * primer salto, segundo salto o ninguno es el servidor.
+         */
+        this.saltoPulsado = false;
+        this.saltoEnviado = false;
+
         this.configurarControles();
     }
 
@@ -98,7 +111,8 @@ class Juego {
     /**
      * Registra los controles del juego (mismos que el original):
      * A / ← izquierda, D / → derecha, W / ↑ apuntar arriba,
-     * S / ↓ apuntar abajo, ESPACIO saltar, CLIC cargar y disparar.
+     * S / ↓ apuntar abajo, ESPACIO saltar (dos veces: doble salto),
+     * CLIC cargar y disparar.
      */
     configurarControles() {
         const bloquear = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"];
@@ -108,6 +122,12 @@ class Juego {
                 evento.preventDefault();
             }
 
+            // Doble salto: cada PULSACIÓN de ESPACIO se apunta una sola vez (la
+            // repetición automática del teclado no cuenta como pulsación nueva).
+            if (evento.code === "Space" && !evento.repeat) {
+                this.saltoPulsado = true;
+            }
+
             this.claves.add(evento.code);
         });
 
@@ -115,9 +135,12 @@ class Juego {
             this.claves.delete(evento.code);
         });
 
-        // Si la ventana pierde el foco no debe quedarse ninguna tecla pulsada.
+        // Si la ventana pierde el foco no debe quedarse ninguna tecla pulsada
+        // (ni una pulsación de salto pendiente).
         window.addEventListener("blur", () => {
             this.claves.clear();
+            this.saltoPulsado = false;
+            this.saltoEnviado = false;
             this.soltarCarga();
         });
 
@@ -634,15 +657,34 @@ class Juego {
         this.ultimoEnvio = tiempo;
 
         if (!this.puedeActuar()) {
+            // Fuera de su turno no se envía nada: la pulsación pendiente se
+            // descarta para que el pollito no salte solo al empezar el turno.
+            this.saltoPulsado = false;
+            this.saltoEnviado = false;
             return;
         }
 
         const teclas = this.leerTeclas();
         const mio = this.miJugadorEstado();
 
+        /**
+         * ESPACIO viaja como PULSACIÓN, nunca como "mantener": el servidor
+         * recibe un borde limpio por cada toque y decide si es el primer salto,
+         * el segundo (doble salto) o ninguno. Si dos toques cayeran en el mismo
+         * hueco entre paquetes, el segundo espera al siguiente paquete en lugar
+         * de perderse, y nunca se mandan dos "pulsado" seguidos.
+         */
+        const saltar = this.saltoPulsado && !this.saltoEnviado;
+
+        this.saltoEnviado = saltar;
+
+        if (saltar) {
+            this.saltoPulsado = false;
+        }
+
         window.redJuego.entrada({
             direccion: teclas.izquierda && !teclas.derecha ? -1 : teclas.derecha && !teclas.izquierda ? 1 : 0,
-            saltar: teclas.salto,
+            saltar,
             angulo: Math.round(this.anguloLocal)
         });
 

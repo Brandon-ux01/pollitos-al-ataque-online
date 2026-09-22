@@ -537,7 +537,7 @@ class Interfaz {
     dibujarAyuda(ctx) {
         const x = this.juego.ancho / 2;
         const y = this.juego.alto - 14;
-        const texto = "A / D o ← → mover · W / S o ↑ ↓ apuntar · ESPACIO saltar · CLIC mantener y soltar para disparar";
+        const texto = "A / D o ← → mover · W / S o ↑ ↓ apuntar · ESPACIO saltar ×2 (doble salto) · CLIC mantener y soltar para disparar";
 
         ctx.save();
         ctx.textAlign = "center";

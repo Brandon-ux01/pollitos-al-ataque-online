@@ -19,8 +19,14 @@
  *   7. Se espera la explosión -> TODOS reciben el evento de explosión.
  *   8. Cinco jugadores se desconectan -> la partida termina y el cliente que
  *      queda recibe "fin-partida" (game over).
- *   9. Se comprueba que un jugador SIN turno no puede disparar.
- *  10. Se apaga el servidor y se informa del resultado.
+ *   9. Se comprueba que un jugador SIN turno no puede disparar, y que el
+ *      jugador con turno puede dar el DOBLE SALTO (dos ESPACIO seguidos, los
+ *      mismos que reciben los otros cinco clientes).
+ *  10. CHAT DE SALA con la MISMA conexión Socket.IO: los 6 jugadores se
+ *      escriben entre ellos, un jugador de OTRA sala no recibe nada, el
+ *      servidor recorta a 100 caracteres, rechaza mensajes vacíos o que no son
+ *      texto, frena el spam y el chat no altera la partida.
+ *  11. Se apaga el servidor y se informa del resultado.
  *
  * Uso:
  *   npm run salas
@@ -168,11 +174,25 @@ function crearCliente(io, nombre) {
         lobby: null,
         jugadores: 0,
         estadosPartida: [],
-        eventos: []
+        eventos: [],
+        /** Mensajes de chat recibidos por este cliente. */
+        chatMensajes: [],
+        /** Configuración del chat publicada por el servidor al conectarse. */
+        chatConfig: null
     };
 
     socket.on("connect", () => {
         cliente.id = socket.id;
+    });
+
+    socket.on("conexion:identidad", (datos) => {
+        if (datos && datos.chat) {
+            cliente.chatConfig = datos.chat;
+        }
+    });
+
+    socket.on("chat:mensaje", (datos) => {
+        cliente.chatMensajes.push(datos);
     });
 
     socket.on("sala:estado", (paquete) => {
@@ -401,6 +421,94 @@ function pedirListadoDeSonidos() {
                 ` y el paquete manda la duración (${primerEstado ? primerEstado.duracionTurno : "sin dato"})`
         );
 
+        /* --- Doble salto sincronizado (mismo evento de entrada de siempre) --- */
+        console.log("");
+        console.log("== DOBLE SALTO SINCRONIZADO ==");
+
+        const idSaltador = primerEstado.turno;
+        const clienteSaltador = clientes.find((cliente) => cliente.id === idSaltador);
+
+        /** Altura (y) del jugador en el último estado que ha recibido un cliente. */
+        const alturaDe = (cliente, id) => {
+            const paquete = cliente.estadosPartida[cliente.estadosPartida.length - 1];
+
+            if (!paquete) {
+                return null;
+            }
+
+            const jugador = (paquete.jugadores || []).find((datos) => datos.id === id);
+
+            return jugador ? jugador.y : null;
+        };
+
+        /** Punto más alto (y mínima) que ha visto un cliente para ese jugador. */
+        const alturaMinimaDe = (cliente, id) => {
+            let minima = Infinity;
+
+            cliente.estadosPartida.forEach((paquete) => {
+                (paquete.jugadores || []).forEach((jugador) => {
+                    if (jugador.id === id) {
+                        minima = Math.min(minima, jugador.y);
+                    }
+                });
+            });
+
+            return minima;
+        };
+
+        const saltosDe = (cliente) => cliente.eventos
+            .filter((evento) => evento.tipo === "salto" && evento.jugadorId === idSaltador).length;
+
+        comprobar(Boolean(clienteSaltador), "se identifica al jugador con el turno para probar el doble salto");
+
+        // Un momento para que el pollito esté apoyado sobre su plataforma.
+        await new Promise((resolver) => setTimeout(resolver, 500));
+
+        const alturaMinimaAntes = alturaMinimaDe(clientes[0], idSaltador);
+
+        // Primer salto: ESPACIO pulsado (el cliente manda la pulsación).
+        clienteSaltador.socket.emit("jugador:entrada", { saltar: true });
+        await new Promise((resolver) => setTimeout(resolver, 200));
+
+        // Se suelta ESPACIO y se vuelve a pulsar en el aire: SEGUNDO salto.
+        clienteSaltador.socket.emit("jugador:entrada", { saltar: false });
+        await new Promise((resolver) => setTimeout(resolver, 120));
+        clienteSaltador.socket.emit("jugador:entrada", { saltar: true });
+        await new Promise((resolver) => setTimeout(resolver, 250));
+
+        const saltosEnTodos = await esperar(
+            () => clientes.every((cliente) => saltosDe(cliente) >= 2),
+            4000
+        );
+
+        comprobar(saltosEnTodos,
+            "los 6 jugadores reciben los DOS saltos del jugador con turno (doble salto sincronizado)");
+
+        const alturaMinimaDespues = alturaMinimaDe(clientes[0], idSaltador);
+
+        comprobar(alturaMinimaDespues < alturaMinimaAntes - 20,
+            `el doble salto se ve en la posición que reciben todos (sube de ${Math.round(alturaMinimaAntes)} a ${Math.round(alturaMinimaDespues)})`);
+        comprobar(alturaDe(clientes[0], idSaltador) !== null, "los estados siguen llegando con la posición del pollito");
+
+        // Un tercer ESPACIO en el aire no produce un tercer salto.
+        const saltosAntesDelTercero = saltosDe(clientes[0]);
+
+        clienteSaltador.socket.emit("jugador:entrada", { saltar: false });
+        clienteSaltador.socket.emit("jugador:entrada", { saltar: true });
+        await new Promise((resolver) => setTimeout(resolver, 400));
+
+        comprobar(saltosDe(clientes[0]) === saltosAntesDelTercero,
+            "un tercer ESPACIO en el aire no da un tercer salto (tampoco por la red)");
+
+        // Se espera a que vuelva a estar apoyado para no alterar las pruebas
+        // siguientes (disparo y explosión).
+        await esperar(() => {
+            const paquete = clientes[0].estadosPartida[clientes[0].estadosPartida.length - 1];
+            const jugador = paquete && (paquete.jugadores || []).find((datos) => datos.id === idSaltador);
+
+            return Boolean(jugador) && jugador.enSuelo === true;
+        }, 3000);
+
         /* --- Disparo y explosión sincronizados --- */
         console.log("");
         console.log("== DISPARO Y EXPLOSIÓN SINCRONIZADOS ==");
@@ -436,6 +544,120 @@ function pedirListadoDeSonidos() {
             cliente.eventos.filter((evento) => evento.tipo === "turno").length >= 2), 9000);
         comprobar(cambioDeJugador, "todos reciben el cambio de turno (efecto de cambio de jugador)");
 
+        /* --- Chat de la sala (misma conexión Socket.IO) ---
+           Se prueba DESPUÉS de disparos, explosiones y cambios de turno: el
+           chat debe funcionar igual en plena partida. */
+        console.log("");
+        console.log("== CHAT DE LA SALA (TIEMPO REAL) ==");
+
+        // Un cliente en OTRA sala: los mensajes no pueden cruzarse nunca.
+        const ajeno = crearCliente(io, "Ajeno");
+        await esperar(() => ajeno.id, 8000);
+        const salaAjena = await enviar(ajeno, "sala:crear", { nombre: "Ajeno" });
+        comprobar(salaAjena.ok === true, "un jugador entra en OTRA sala (para comprobar el aislamiento del chat)");
+
+        // El límite de caracteres lo publica el servidor: el cliente no tiene copia.
+        comprobar(
+            Boolean(clientes[0].chatConfig) && clientes[0].chatConfig.longitudMaxima === CONFIG.CHAT_LONGITUD_MAXIMA,
+            `el servidor publica la configuración del chat (máximo ${CONFIG.CHAT_LONGITUD_MAXIMA} caracteres)`
+        );
+
+        const envio1 = await enviar(clientes[0], "chat:enviar", { texto: "¡Prepárate!" });
+        comprobar(envio1.ok === true, "el jugador 1 escribe \"¡Prepárate!\"");
+
+        const llegaATodos = await esperar(() => clientes.every((cliente) => cliente.chatMensajes.length >= 1), 4000);
+        comprobar(llegaATodos, "los 6 jugadores de la sala reciben el mensaje al instante");
+
+        const primerMensaje = clientes[0].chatMensajes[0] || {};
+        comprobar(primerMensaje.texto === "¡Prepárate!", "el mensaje llega con el texto exacto");
+        comprobar(primerMensaje.nombre === "Brandon1", "el servidor pone el nombre de quien escribe (no el cliente)");
+        comprobar(
+            primerMensaje.colorNombre === CONFIG.COLORES_JUGADOR[0].nombre &&
+                primerMensaje.color === CONFIG.COLORES_JUGADOR[0].color,
+            `el servidor pone el color del jugador 1 (${primerMensaje.colorNombre})`
+        );
+        comprobar(
+            clientes.every((cliente) => cliente.chatMensajes[0] && cliente.chatMensajes[0].nombre === "Brandon1"),
+            "los seis ven el mismo autor en el mensaje"
+        );
+
+        const envio2 = await enviar(clientes[1], "chat:enviar", { texto: "¡Buen tiro!" });
+        comprobar(envio2.ok === true, "el jugador 2 responde \"¡Buen tiro!\" en plena partida");
+
+        const lleganDos = await esperar(() => clientes.every((cliente) => cliente.chatMensajes.length >= 2), 4000);
+        comprobar(lleganDos, "los 6 reciben también el segundo mensaje");
+
+        comprobar(
+            Boolean(clientes[0].chatMensajes[1]) &&
+                clientes[0].chatMensajes[1].colorNombre === CONFIG.COLORES_JUGADOR[1].nombre,
+            `cada jugador conserva su color (jugador 2 = ${CONFIG.COLORES_JUGADOR[1].nombre})`
+        );
+
+        // El texto viaja como texto plano: el cliente lo pinta con textContent,
+        // así que el HTML que escriba un jugador se ve literal (no se ejecuta).
+        const html = '<script>alert("hola")</script>';
+        const envioHtml = await enviar(clientes[2], "chat:enviar", { texto: html });
+        const llegoHtml = await esperar(() => clientes[0].chatMensajes.length >= 3, 4000);
+        const mensajeHtml = clientes[0].chatMensajes[2] || {};
+
+        comprobar(envioHtml.ok === true && llegoHtml, "un mensaje con HTML se acepta y llega a la sala");
+        comprobar(mensajeHtml.texto === html,
+            "el HTML se retransmite literal (el cliente lo pinta como texto, no lo ejecuta)");
+
+        // Mensajes demasiado largos: el servidor los recorta al máximo.
+        const envioLargo = await enviar(clientes[3], "chat:enviar", {
+            texto: "z".repeat(CONFIG.CHAT_LONGITUD_MAXIMA + 80)
+        });
+        const llegoLargo = await esperar(() => clientes[0].chatMensajes.length >= 4, 4000);
+        const mensajeLargo = clientes[0].chatMensajes[3] || {};
+
+        comprobar(envioLargo.ok === true && llegoLargo, "un mensaje larguísimo se acepta recortado");
+        comprobar(
+            String(mensajeLargo.texto || "").length === CONFIG.CHAT_LONGITUD_MAXIMA,
+            `el servidor recorta el mensaje a ${CONFIG.CHAT_LONGITUD_MAXIMA} caracteres` +
+                ` (llegaron ${String(mensajeLargo.texto || "").length})`
+        );
+
+        // Mensajes inválidos: nunca se retransmiten.
+        const antesDeInvalidos = clientes[0].chatMensajes.length;
+        const vacio = await enviar(clientes[0], "chat:enviar", { texto: "     " });
+        const noEsTexto = await enviar(clientes[4], "chat:enviar", { texto: { malicioso: true } });
+        const sinDatos = await enviar(clientes[5], "chat:enviar", null);
+        await new Promise((resolver) => setTimeout(resolver, 500));
+
+        comprobar(vacio.ok === false, "el servidor rechaza un mensaje vacío (solo espacios)");
+        comprobar(noEsTexto.ok === false, "el servidor rechaza un mensaje que no es texto");
+        comprobar(sinDatos.ok === false, "el servidor rechaza un envío sin datos");
+        comprobar(clientes[0].chatMensajes.length === antesDeInvalidos,
+            "los mensajes inválidos no se retransmiten a la sala");
+
+        // Aislamiento entre salas.
+        comprobar(ajeno.chatMensajes.length === 0, "un jugador de OTRA sala NO recibe ningún mensaje de esta sala");
+
+        // El chat no toca la lógica del juego.
+        const estadoConChat = clientes[0].estadosPartida[clientes[0].estadosPartida.length - 1];
+        comprobar(
+            Boolean(estadoConChat) && estadoConChat.estado !== "finalizado" &&
+                (estadoConChat.jugadores || []).length === 6,
+            "el chat no altera la partida (sigue en curso y con los 6 jugadores)"
+        );
+        comprobar(Boolean(estadoConChat && estadoConChat.turno), "el turno sigue vivo después de chatear");
+        comprobar(
+            !clientes[0].eventos.some((evento) => String(evento.tipo).indexOf("chat") === 0),
+            "el chat no genera eventos de juego (turnos, disparos, daño)"
+        );
+
+        // Límite de mensajes por segundo: el spam se descarta.
+        const respuestasSpam = await Promise.all(
+            Array.from({ length: 8 }, (valor, indice) => enviar(clientes[5], "chat:enviar", { texto: `spam ${indice}` }))
+        );
+        const rechazados = respuestasSpam.filter((respuesta) => respuesta.ok === false).length;
+
+        comprobar(rechazados >= 1,
+            `el servidor frena el spam (${rechazados} de 8 mensajes rechazados por ir demasiado rápido)`);
+
+        ajeno.socket.disconnect();
+
         /* --- Desconexión y fin de partida --- */
         console.log("");
         console.log("== DESCONEXIÓN Y FIN DE PARTIDA ==");
@@ -470,7 +692,8 @@ function pedirListadoDeSonidos() {
         process.exitCode = 1;
     } else {
         console.log("  CREAR SALA -> CÓDIGO -> 6 JUGADORES -> PARTIDA -> DISPARO");
-        console.log("  -> EXPLOSIÓN -> GAME OVER: comprobado con el servidor real.");
+        console.log("  -> EXPLOSIÓN -> CHAT EN TIEMPO REAL -> GAME OVER: comprobado");
+        console.log("  con el servidor y el protocolo reales.");
         console.log("");
     }
 

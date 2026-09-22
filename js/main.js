@@ -6,6 +6,7 @@
  * Une la interfaz (HTML/CSS) con la red (red.js) y el juego (juego.js):
  *  - Menú principal (JUGAR, CREAR SALA, UNIRSE A SALA, OPCIONES, SALIR).
  *  - Sala de espera de seis espacios con personaje y estado "listo".
+ *  - Chat flotante de combate durante la batalla (js/chat.js).
  *  - Arranque de la partida y pantalla final con estadísticas.
  *  - Avisos flotantes de conexión, desconexión y errores.
  *
@@ -18,6 +19,9 @@
  *    resultado real (sala creada con su código o error explicado).
  *  - El estado de la conexión se refresca cada segundo, así que ya no se queda
  *    en "Conectando..." para siempre.
+ *  - CHAT FLOTANTE DE COMBATE (js/chat.js): mensajes tipo burbuja bajo el HUD
+ *    "TURNO DE" que se apagan solos; el campo de escritura aparece solo con
+ *    ENTER o T y se limpia y se vuelve a llenar al empezar otra partida.
  */
 
 /** Pantallas disponibles y su elemento del DOM (no hay pantalla de créditos). */
@@ -76,6 +80,10 @@ function volverAlMenu() {
     if (window.redJuego.codigo) {
         window.redJuego.salirSala();
     }
+
+    // Al abandonar la partida el historial del chat se vacía: los mensajes
+    // eran de esa sala y de esa partida.
+    window.chatDeSala.limpiar();
 
     estadoSala = null;
     estoyListo = false;
@@ -179,6 +187,13 @@ function manejarEntrada(respuesta, modo = "rapida") {
     }
 
     estoyListo = false;
+
+    // Sala nueva: el chat arranca vacío y habilitado (no se arrastran mensajes
+    // de la sala anterior). El color de cada jugador lo pone el servidor dentro
+    // de cada mensaje (servidor/servidor.js), así que aquí no hay nada que
+    // configurar.
+    window.chatDeSala.limpiar();
+    window.chatDeSala.habilitar();
 
     const avisoSala = document.getElementById("aviso-sala");
     const codigo = respuesta.codigo;
@@ -618,6 +633,11 @@ function arrancarJuego(paquete) {
     mostrarPantalla("juego");
     juego.alRecibir(paquete);
     juego.iniciar();
+
+    // Partida nueva (o revancha): el chat flotante se limpia, se coloca justo
+    // debajo del HUD "TURNO DE" y avisa de cómo escribir. Ese aviso se apaga
+    // solo, como cualquier mensaje.
+    window.chatDeSala.iniciarPartida();
 }
 
 /** Detiene y destruye el juego actual. */
@@ -687,6 +707,11 @@ function mostrarPantallaFinal(paquete) {
         ${filas}`;
 
     document.getElementById("pantalla-final").hidden = false;
+
+    // La partida terminó: no se puede escribir ni entran mensajes nuevos, pero
+    // los que están en pantalla se apagan solos (nada de un chat permanente
+    // encima del resultado).
+    window.chatDeSala.bloquear();
 
     // La música de batalla se detiene y suena game over desde el evento
     // "fin-partida" (js/juego.js): aquí solo se muestra el resultado.
@@ -836,6 +861,11 @@ precargarDibujos();
 refrescarBotonSonido();
 mostrarPantalla("menu");
 refrescarEstadoConexion();
+
+// Chat de la sala: conecta su panel con la red y con los eventos del juego
+// (ENTER, botón ➤, limpieza al cambiar de sala...). Usa la MISMA conexión
+// Socket.IO de la partida: no abre ninguna conexión nueva.
+window.chatDeSala.iniciar();
 
 // El estado de conexión se refresca cada segundo: si el servidor está apagado
 // se ve el motivo real en el menú en lugar de quedarse en "Conectando...".

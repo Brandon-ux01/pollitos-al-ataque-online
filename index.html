@@ -273,6 +273,23 @@
         <canvas id="canvas-juego" width="1200" height="600"></canvas>
         <button id="btn-salir-partida" class="boton-flotante" type="button">SALIR AL MENÚ</button>
 
+        <!-- CHAT FLOTANTE DE COMBATE (js/chat.js): burbujas sueltas que suben en
+             cascada, en la parte superior izquierda y JUSTO DEBAJO del HUD
+             "TURNO DE" (la posición la calcula js/chat.js con la caja real del
+             lienzo). No hay panel ni historial: cada mensaje se apaga solo.
+             El campo de escritura solo existe mientras el jugador escribe
+             (se abre con ENTER o T) y se oculta al enviar.
+             El máximo de caracteres NO está escrito aquí: lo publica el
+             servidor (servidor/config.js -> CHAT_LONGITUD_MAXIMA). -->
+        <div id="chat-flotante" class="chat-flotante" aria-live="polite" aria-label="Mensajes de la sala">
+            <div id="chat-mensajes" class="chat-mensajes"></div>
+
+            <div id="chat-entrada" class="chat-entrada" hidden>
+                <span class="chat-aviso">CHAT</span>
+                <input id="chat-campo" class="chat-campo" type="text" autocomplete="off" spellcheck="false" placeholder="Escribe y pulsa ENTER (ESC para salir)" aria-label="Escribe un mensaje para la sala">
+            </div>
+        </div>
+
         <div id="pantalla-final" class="pantalla-final" hidden>
             <div class="panel-final">
                 <h2 id="resultado-titulo">🏆 VICTORIA</h2>
@@ -303,19 +320,20 @@
     </div>
     <!-- fin de #aplicacion -->
 
-    <script src="js/configuracion/configuracion_sonido.js?v=online-3.1"></script>
-    <script src="js/config.js?v=online-3.1"></script>
-    <script src="js/recursos.js?v=online-3.1"></script>
-    <script src="js/sonido.js?v=online-3.1"></script>
-    <script src="js/red.js?v=online-3.1"></script>
-    <script src="js/terreno.js?v=online-3.1"></script>
-    <script src="js/escenario.js?v=online-3.1"></script>
-    <script src="js/particulas.js?v=online-3.1"></script>
-    <script src="js/explosion.js?v=online-3.1"></script>
-    <script src="js/personaje.js?v=online-3.1"></script>
-    <script src="js/interfaz.js?v=online-3.1"></script>
-    <script src="js/juego.js?v=online-3.1"></script>
-    <script src="js/main.js?v=online-3.1"></script>
+    <script src="js/configuracion/configuracion_sonido.js?v=online-3.4"></script>
+    <script src="js/config.js?v=online-3.4"></script>
+    <script src="js/recursos.js?v=online-3.4"></script>
+    <script src="js/sonido.js?v=online-3.4"></script>
+    <script src="js/red.js?v=online-3.4"></script>
+    <script src="js/terreno.js?v=online-3.4"></script>
+    <script src="js/escenario.js?v=online-3.4"></script>
+    <script src="js/particulas.js?v=online-3.4"></script>
+    <script src="js/explosion.js?v=online-3.4"></script>
+    <script src="js/personaje.js?v=online-3.4"></script>
+    <script src="js/interfaz.js?v=online-3.4"></script>
+    <script src="js/juego.js?v=online-3.4"></script>
+    <script src="js/chat.js?v=online-3.4"></script>
+    <script src="js/main.js?v=online-3.4"></script>
 </body>
 
 </html>

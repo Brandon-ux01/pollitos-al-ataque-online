@@ -195,6 +195,13 @@ class RedJuego {
         this.jugador = null;
 
         /**
+         * Configuración del chat que publica el servidor al conectarse
+         * (límite de caracteres, mensajes por segundo...). El cliente NO tiene
+         * una copia propia de esos números: los lee de aquí.
+         */
+        this.chatConfig = null;
+
+        /**
          * Estado de conexión.
          */
         this.conectado = false;
@@ -229,7 +236,11 @@ class RedJuego {
             desconexion: [],
             sala: [],
             partida: [],
-            aviso: []
+            aviso: [],
+            // Chat de la sala: mensajes recibidos ("chat") y configuración
+            // publicada por el servidor ("chatConfig").
+            chat: [],
+            chatConfig: []
         };
 
         /**
@@ -554,6 +565,24 @@ class RedJuego {
                     this.id =
                         datos.id;
                 }
+
+
+                /**
+                 * El servidor publica aquí los límites del chat
+                 * (servidor/config.js): el cliente los aplica al campo de
+                 * texto en lugar de tener una segunda copia de los números.
+                 */
+                if (datos && datos.chat) {
+
+                    this.chatConfig =
+                        datos.chat;
+
+
+                    this.avisar(
+                        "chatConfig",
+                        datos.chat
+                    );
+                }
             }
         );
 
@@ -710,6 +739,36 @@ class RedJuego {
                 this.avisar(
                     "partida",
                     paquete
+                );
+            }
+        );
+
+
+        /**
+         * =================================================
+         * CHAT DE LA SALA
+         * =================================================
+         *
+         * El servidor solo envía los mensajes de la MISMA sala, así que aquí
+         * no hay nada que filtrar: se entrega tal cual a js/chat.js. El chat
+         * es independiente del juego (turnos, disparos, daño...).
+         */
+        this.socket.on(
+            "chat:mensaje",
+            (datos) => {
+
+                if (
+                    !datos ||
+                    typeof datos.texto !== "string"
+                ) {
+
+                    return;
+                }
+
+
+                this.avisar(
+                    "chat",
+                    datos
                 );
             }
         );
@@ -1114,6 +1173,31 @@ class RedJuego {
             "jugador:disparar",
             null,
             null
+        );
+    }
+
+
+    /**
+     * =====================================================
+     * CHAT: ENVIAR MENSAJE A LA SALA
+     * =====================================================
+     *
+     * Solo se manda el texto: el servidor lo limpia, lo recorta al máximo, y
+     * le pone el nombre y el color del jugador (nunca el cliente). La
+     * respuesta es opcional y sirve para avisar si el mensaje se descartó
+     * (vacío, demasiado rápido...).
+     */
+    enviarChat(
+        texto,
+        respuesta = null
+    ) {
+
+        this.emitir(
+            "chat:enviar",
+            {
+                texto
+            },
+            respuesta
         );
     }
 
